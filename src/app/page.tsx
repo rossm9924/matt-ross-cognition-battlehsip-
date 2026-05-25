@@ -1,9 +1,11 @@
-import { BattleshipGame } from "@/components/battleship-game";
+"use client";
+
+import dynamic from "next/dynamic";
+
+const GameCanvas = dynamic(() => import("@/components/GameCanvas"), {
+  ssr: false,
+});
 
 export default function Home() {
-  return (
-    <main className="min-h-screen bg-background">
-      <BattleshipGame />
-    </main>
-  );
+  return <GameCanvas />;
 }
