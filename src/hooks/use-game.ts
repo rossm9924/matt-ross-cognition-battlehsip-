@@ -220,6 +220,8 @@ export function useGame() {
         deduplicateHitQueue(aiState);
         const shot = getAIShot(prev.difficulty, aiState, newPlayerShips);
 
+        if (!shot) return { ...prev, isPlayerTurn: true, message: "AI has no moves left. Your turn!" };
+
         const result = processShot(shot, newPlayerGrid, newPlayerShips);
 
         newAiShotHistory[shot.row][shot.col] = result.result;

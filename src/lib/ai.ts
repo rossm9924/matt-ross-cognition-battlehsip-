@@ -18,7 +18,7 @@ export function createAIState(shotHistory: CellState[][]): AIState {
 }
 
 // Easy AI: purely random valid shots
-function getEasyShot(shotHistory: CellState[][]): Coordinate {
+function getEasyShot(shotHistory: CellState[][]): Coordinate | null {
   const available: Coordinate[] = [];
   for (let row = 0; row < GRID_SIZE; row++) {
     for (let col = 0; col < GRID_SIZE; col++) {
@@ -27,6 +27,7 @@ function getEasyShot(shotHistory: CellState[][]): Coordinate {
       }
     }
   }
+  if (available.length === 0) return null;
   return available[Math.floor(Math.random() * available.length)];
 }
 
@@ -55,7 +56,7 @@ function getAdjacentCells(
 }
 
 // Medium AI: random until a hit, then hunts adjacent cells
-function getMediumShot(aiState: AIState): Coordinate {
+function getMediumShot(aiState: AIState): Coordinate | null {
   // If we have cells to hunt, try those first
   while (aiState.hitQueue.length > 0) {
     const target = aiState.hitQueue.shift()!;
@@ -72,7 +73,7 @@ function getMediumShot(aiState: AIState): Coordinate {
 function getHardShot(
   aiState: AIState,
   playerShips: Ship[]
-): Coordinate {
+): Coordinate | null {
   // If we have cells in the hunt queue, prioritize those
   while (aiState.hitQueue.length > 0) {
     const target = aiState.hitQueue.shift()!;
@@ -170,11 +171,12 @@ function getHardShot(
   return bestCells[Math.floor(Math.random() * bestCells.length)];
 }
 
+
 export function getAIShot(
   difficulty: Difficulty,
   aiState: AIState,
   playerShips: Ship[]
-): Coordinate {
+): Coordinate | null {
   switch (difficulty) {
     case "easy":
       return getEasyShot(aiState.shotHistory);
