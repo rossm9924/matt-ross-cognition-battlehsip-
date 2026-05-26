@@ -48,11 +48,12 @@ export class PlacementScene implements GameScene {
     ctx.fillStyle = hex(C.GREEN);
     ctx.fillText("STRATEGY PANEL", CANVAS_W / 2, 25);
 
+    const gridCenterX = GX + (GRID_SIZE * CELL) / 2;
     ctx.font = `13px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()}`, CANVAS_W / 2, 50);
+    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()}`, gridCenterX, 50);
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(this.msg, CANVAS_W / 2, 70);
+    ctx.fillText(this.msg, gridCenterX, 70);
 
     // Grid
     this.drawGrid(ctx);
@@ -120,8 +121,9 @@ export class PlacementScene implements GameScene {
       return;
     }
 
-    // Play button
-    if (this.allPlaced && this.inRect(x, y, px, by + 60, 260, 48)) {
+    // Play button (below rotate button)
+    const playBtnY = rotateBtnY + 50;
+    if (this.allPlaced && this.inRect(x, y, px, playBtnY, 260, 48)) {
       this.engine.audio.sonarPing();
       this.engine.playerBoard = this.board;
       this.engine.switchScene(SCENES.BATTLE);
@@ -239,7 +241,7 @@ export class PlacementScene implements GameScene {
     ctx.textBaseline = "middle";
     ctx.font = `15px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("YOUR FLEET", px, py - 30);
+    ctx.fillText("YOUR FLEET", px, py - 20);
 
     this.remaining.forEach((cfg, i) => {
       const iy = py + i * 44;
@@ -266,16 +268,18 @@ export class PlacementScene implements GameScene {
     this.drawBtn(ctx, px, by, 120, 36, "SHUFFLE");
     this.drawBtn(ctx, px + 140, by, 100, 36, "TRASH");
 
+    const rotateBtnY = GY + Math.max(this.fleet.length, 7) * 44 + 80;
+    const playBtnY = rotateBtnY + 50;
     if (this.allPlaced) {
-      const hover = this.inRect(this.mx, this.my, px, by + 60, 260, 48);
+      const hover = this.inRect(this.mx, this.my, px, playBtnY, 260, 48);
       ctx.fillStyle = hover ? hex(C.GREEN) : hex(C.DIM_GREEN);
       ctx.beginPath();
-      ctx.roundRect(px, by + 60, 260, 48, 8);
+      ctx.roundRect(px, playBtnY, 260, 48, 8);
       ctx.fill();
       ctx.fillStyle = "#000";
       ctx.textAlign = "center";
       ctx.font = `22px ${FONT}`;
-      ctx.fillText("▶  PLAY", px + 130, by + 84);
+      ctx.fillText("▶  PLAY", px + 130, playBtnY + 24);
     }
   }
 
