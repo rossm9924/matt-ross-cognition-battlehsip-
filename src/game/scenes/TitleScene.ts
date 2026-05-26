@@ -66,6 +66,17 @@ export class TitleScene implements GameScene {
 
     // Corner icons
     this.drawCornerIcon(ctx, 30, 30, "?");
+    // Tooltip for ? icon on hover
+    if (this.mx < 60 && this.my < 50 && !this.showInfo) {
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      this.roundRect(ctx, 50, 16, 64, 26, 4);
+      ctx.fill();
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.font = `12px ${FONT}`;
+      ctx.textAlign = "left";
+      ctx.fillText("RULES", 58, 30);
+      ctx.textAlign = "center";
+    }
     this.drawMuteIcon(ctx, W - 40, 30);
 
     // Info overlay

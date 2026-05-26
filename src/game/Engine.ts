@@ -39,6 +39,9 @@ export class Engine {
     this.canvas.style.objectFit = "contain";
     this.canvas.style.display = "block";
     this.canvas.style.background = "#000";
+    this.canvas.setAttribute("role", "application");
+    this.canvas.setAttribute("aria-label", "Battleship War — Naval Combat Simulator. Use mouse to interact.");
+    this.canvas.tabIndex = 0;
     container.appendChild(this.canvas);
     this.ctx = this.canvas.getContext("2d")!;
 
@@ -69,6 +72,7 @@ export class Engine {
     this.canvas.removeEventListener("mousemove", this.onMM);
     this.canvas.removeEventListener("mousedown", this.onMD);
     document.removeEventListener("keydown", this.onKD);
+    this.canvas.remove();
   }
 
   private coords(e: MouseEvent): { x: number; y: number } {
