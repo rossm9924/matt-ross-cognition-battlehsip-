@@ -39,29 +39,32 @@ export class GameOverScene implements GameScene {
     ctx.font = `80px ${FONT}`;
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 6;
-    ctx.strokeText(won ? "VICTORY" : "DEFEAT", cx, cy - 130);
+    ctx.strokeText(won ? "VICTORY" : "DEFEAT", cx, 100);
     ctx.fillStyle = won ? hex(C.GREEN) : hex(C.HIT_RED);
-    ctx.fillText(won ? "VICTORY" : "DEFEAT", cx, cy - 130);
+    ctx.fillText(won ? "VICTORY" : "DEFEAT", cx, 100);
 
     ctx.font = `18px ${FONT}`;
     ctx.fillStyle = won ? hex(C.DIM_GREEN) : "#aa2222";
     ctx.fillText(
       won ? "All enemy ships destroyed!" : "Your fleet has been destroyed.",
-      cx, cy - 50,
+      cx, 170,
     );
 
     // Score
     ctx.font = `32px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(`SCORE: ${score}`, cx, cy + 10);
+    ctx.fillText(`SCORE: ${score}`, cx, 220);
 
-    ctx.font = `16px ${FONT}`;
+    ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText(`HIGH SCORE: ${hs}`, cx, cy + 50);
+    ctx.fillText(`HIGH SCORE: ${hs}`, cx, 255);
+
+    // Stats panel (#15)
+    this.renderStats(ctx, cx, 290);
 
     // Buttons
-    this.drawBtn(ctx, cx - 140, cy + 100, 280, 50, "PLAY AGAIN");
-    this.drawBtn(ctx, cx - 140, cy + 170, 280, 50, "CHANGE MODE");
+    this.drawBtn(ctx, cx - 140, cy + 140, 280, 50, "PLAY AGAIN");
+    this.drawBtn(ctx, cx - 140, cy + 210, 280, 50, "CHANGE MODE");
 
     // Mute
     ctx.fillStyle = "#222";
@@ -69,6 +72,52 @@ export class GameOverScene implements GameScene {
     ctx.font = "20px sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", W - 40, 30);
+  }
+
+  private renderStats(ctx: CanvasRenderingContext2D, cx: number, y: number): void {
+    const shotsFired = this.engine.shotsFired;
+    const shotsHit = this.engine.shotsHit;
+    const accuracy = shotsFired > 0 ? Math.round((shotsHit / shotsFired) * 100) : 0;
+    const shipsLost = this.engine.shipsLost;
+
+    let elapsed = "—";
+    if (this.engine.gameStartTime > 0 && this.engine.gameEndTime > 0) {
+      const ms = this.engine.gameEndTime - this.engine.gameStartTime;
+      const totalSec = Math.floor(ms / 1000);
+      const min = Math.floor(totalSec / 60);
+      const sec = totalSec % 60;
+      elapsed = `${min}:${sec.toString().padStart(2, "0")}`;
+    }
+
+    // Stats box
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    const bw = 360, bh = 120;
+    ctx.beginPath();
+    ctx.roundRect(cx - bw / 2, y, bw, bh, 8);
+    ctx.fill();
+    ctx.strokeStyle = hex(C.DIM_GREEN);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.font = `13px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("BATTLE STATISTICS", cx, y + 18);
+
+    ctx.font = `12px ${FONT}`;
+    const stats = [
+      [`Shots Fired: ${shotsFired}`, `Hits: ${shotsHit}`],
+      [`Accuracy: ${accuracy}%`, `Ships Lost: ${shipsLost}`],
+      [`Time: ${elapsed}`, `Difficulty: ${this.engine.difficulty.toUpperCase()}`],
+    ];
+
+    stats.forEach((row, i) => {
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.textAlign = "right";
+      ctx.fillText(row[0], cx - 10, y + 45 + i * 24);
+      ctx.textAlign = "left";
+      ctx.fillText(row[1], cx + 10, y + 45 + i * 24);
+    });
   }
 
   onMouseMove(x: number, y: number): void {
@@ -87,13 +136,13 @@ export class GameOverScene implements GameScene {
     }
 
     // Play Again
-    if (this.inRect(x, y, cx - 140, cy + 100, 280, 50)) {
+    if (this.inRect(x, y, cx - 140, cy + 140, 280, 50)) {
       this.engine.audio.sonarPing();
       this.engine.switchScene(SCENES.PLACEMENT);
     }
 
     // Change Mode
-    if (this.inRect(x, y, cx - 140, cy + 170, 280, 50)) {
+    if (this.inRect(x, y, cx - 140, cy + 210, 280, 50)) {
       this.engine.audio.sonarPing();
       this.engine.switchScene(SCENES.MODE);
     }

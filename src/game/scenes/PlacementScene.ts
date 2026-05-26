@@ -40,20 +40,22 @@ export class PlacementScene implements GameScene {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
+    this.renderTopBar(ctx);
+
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     // Title
     ctx.font = `30px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("STRATEGY PANEL", CANVAS_W / 2, 25);
+    ctx.fillText("STRATEGY PANEL", CANVAS_W / 2, 55);
 
     const gridCenterX = GX + (GRID_SIZE * CELL) / 2;
     ctx.font = `13px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()}`, gridCenterX, 50);
+    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()} | Difficulty: ${this.engine.difficulty.toUpperCase()}`, gridCenterX, 78);
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(this.msg, gridCenterX, 70);
+    ctx.fillText(this.msg, gridCenterX, 94);
 
     // Grid
     this.drawGrid(ctx);
@@ -61,7 +63,6 @@ export class PlacementScene implements GameScene {
     this.drawPreview(ctx);
     this.drawPalette(ctx);
     this.drawButtons(ctx);
-    this.drawMuteIcon(ctx);
   }
 
   onMouseMove(x: number, y: number): void {
@@ -75,26 +76,50 @@ export class PlacementScene implements GameScene {
       return;
     }
 
-    // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
-      this.engine.audio.toggleMute();
+    // Top bar interactions
+    if (y < 36) {
+      // Mute
+      if (x > CANVAS_W - 60) {
+        this.engine.audio.toggleMute();
+        return;
+      }
+      // Quit
+      if (x >= CANVAS_W / 2 - 40 && x <= CANVAS_W / 2 + 40) {
+        this.engine.switchScene(SCENES.TITLE);
+        return;
+      }
       return;
     }
 
     // Palette click
     const px = GX + GRID_SIZE * CELL + 40;
     const py = GY;
-    for (let i = 0; i < this.remaining.length; i++) {
-      const iy = py + i * 44;
-      if (x >= px && x <= px + 200 && y >= iy && y <= iy + 30) {
-        this.selected = this.remaining[i];
-        this.msg = `Placing: ${this.selected.name} (${this.selected.length} cells) — R to rotate`;
+    for (let i = 0; i < this.fleet.length; i++) {
+      const iy = py + i * 36;
+      const cfg = this.fleet[i];
+      const isPlaced = !this.remaining.find((r) => r.id === cfg.id);
+      if (x >= px && x <= px + 200 && y >= iy && y <= iy + 26) {
+        if (isPlaced) {
+          // Pick up placed ship
+          const ship = this.board.ships.find((s) => s.config.id === cfg.id);
+          if (ship) {
+            this.board.remove(ship);
+            this.remaining.push(ship.config);
+            this.selected = ship.config;
+            this.orientation = ship.orientation;
+            this.allPlaced = false;
+            this.msg = `Picked up ${ship.config.name}. Click grid to re-place.`;
+          }
+        } else {
+          this.selected = cfg;
+          this.msg = `Placing: ${cfg.name} (${cfg.length} cells) — R to rotate`;
+        }
         return;
       }
     }
 
     // Shuffle button
-    const by = GY + Math.max(this.fleet.length, 7) * 44 + 30;
+    const by = GY + Math.max(this.fleet.length, 5) * 36 + 16;
     if (this.inRect(x, y, px, by, 120, 36)) {
       this.board.placeRandom(this.fleet);
       this.remaining = [];
@@ -115,7 +140,7 @@ export class PlacementScene implements GameScene {
     }
 
     // Rotate button
-    const rotateBtnY = GY + Math.max(this.fleet.length, 7) * 44 + 80;
+    const rotateBtnY = by + 50;
     if (this.inRect(x, y, px, rotateBtnY, 260, 36)) {
       this.toggleOrientation();
       return;
@@ -166,6 +191,10 @@ export class PlacementScene implements GameScene {
 
   onKeyDown(key: string): void {
     if (key === "r" || key === "R") this.toggleOrientation();
+    if (key === "Escape") {
+      this.selected = null;
+      this.msg = "Selection cancelled. Select a ship to place.";
+    }
   }
 
   private toggleOrientation(): void {
@@ -179,8 +208,39 @@ export class PlacementScene implements GameScene {
     return { row, col };
   }
 
+  private renderTopBar(ctx: CanvasRenderingContext2D): void {
+    ctx.fillStyle = "rgba(17,17,17,0.9)";
+    ctx.fillRect(0, 0, CANVAS_W, 36);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Help
+    ctx.font = `14px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("?", 20, 18);
+
+    // Quit
+    ctx.font = `10px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("QUIT", CANVAS_W / 2, 18);
+
+    // Mute
+    ctx.font = "16px sans-serif";
+    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 30, 18);
+
+    // Mute label on hover
+    if (this.mx > CANVAS_W - 60 && this.my < 36) {
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(CANVAS_W - 90, 38, 60, 20);
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.font = `10px ${FONT}`;
+      ctx.fillText("SOUND", CANVAS_W - 60, 48);
+    }
+  }
+
   private drawGrid(ctx: CanvasRenderingContext2D): void {
-    ctx.strokeStyle = `rgba(26,138,26,0.5)`;
+    ctx.strokeStyle = "rgba(26,138,26,0.5)";
     ctx.lineWidth = 1;
     for (let r = 0; r <= GRID_SIZE; r++) {
       ctx.beginPath();
@@ -208,7 +268,7 @@ export class PlacementScene implements GameScene {
   }
 
   private drawPlacedShips(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = `rgba(51,255,51,0.65)`;
+    ctx.fillStyle = "rgba(51,255,51,0.65)";
     for (const ship of this.board.ships) {
       for (const cell of ship.cells) {
         ctx.beginPath();
@@ -231,6 +291,20 @@ export class PlacementScene implements GameScene {
         ctx.fillRect(GX + cc * CELL + 1, GY + cr * CELL + 1, CELL - 2, CELL - 2);
       }
     }
+
+    // Ship name label near preview
+    ctx.textAlign = "center";
+    ctx.font = `10px ${FONT}`;
+    ctx.fillStyle = canPlace ? hex(C.GREEN) : hex(C.HIT_RED);
+    const labelRow = this.orientation === "vertical" ? cell.row + this.selected.length : cell.row + 1;
+    const labelCol = this.orientation === "horizontal" ? cell.col + Math.floor(this.selected.length / 2) : cell.col;
+    if (labelRow < GRID_SIZE + 2 && labelCol < GRID_SIZE) {
+      ctx.fillText(
+        this.selected.name,
+        GX + labelCol * CELL + CELL / 2,
+        GY + Math.min(labelRow, GRID_SIZE) * CELL + CELL / 2 + 2,
+      );
+    }
   }
 
   private drawPalette(ctx: CanvasRenderingContext2D): void {
@@ -243,32 +317,51 @@ export class PlacementScene implements GameScene {
     ctx.fillStyle = hex(C.GREEN);
     ctx.fillText("YOUR FLEET", px, py - 20);
 
-    this.remaining.forEach((cfg, i) => {
-      const iy = py + i * 44;
+    // Show ALL ships with placed/unplaced status (#8)
+    this.fleet.forEach((cfg, i) => {
+      const iy = py + i * 36;
+      const isRemaining = this.remaining.some((r) => r.id === cfg.id);
       const isSel = this.selected?.id === cfg.id;
-      ctx.fillStyle = isSel ? `rgba(51,255,51,0.8)` : `rgba(26,138,26,0.4)`;
+      const isPlaced = !isRemaining && !isSel;
+
+      // Ship bar
       const w = cfg.length * 24;
+      if (isPlaced) {
+        ctx.fillStyle = "rgba(26,138,26,0.3)";
+      } else if (isSel) {
+        ctx.fillStyle = "rgba(51,255,51,0.8)";
+      } else {
+        ctx.fillStyle = "rgba(26,138,26,0.5)";
+      }
       ctx.beginPath();
       ctx.roundRect(px, iy, w, 20, 4);
       ctx.fill();
 
-      ctx.font = `12px ${FONT}`;
-      ctx.fillStyle = isSel ? hex(C.GREEN) : hex(C.DIM_GREEN);
-      ctx.fillText(cfg.name, px + w + 10, iy + 10);
+      // Label
+      ctx.font = `11px ${FONT}`;
+      if (isPlaced) {
+        ctx.fillStyle = hex(C.DIM_GREEN);
+        ctx.fillText(`✓ ${cfg.name}`, px + w + 8, iy + 10);
+      } else if (isSel) {
+        ctx.fillStyle = hex(C.GREEN);
+        ctx.fillText(`▶ ${cfg.name}`, px + w + 8, iy + 10);
+      } else {
+        ctx.fillStyle = hex(C.GREEN);
+        ctx.fillText(cfg.name, px + w + 8, iy + 10);
+      }
     });
-
-    const rotateBtnY = GY + Math.max(this.fleet.length, 7) * 44 + 80;
-    this.drawRotateBtn(ctx, px, rotateBtnY);
   }
 
   private drawButtons(ctx: CanvasRenderingContext2D): void {
     const px = GX + GRID_SIZE * CELL + 40;
-    const by = GY + Math.max(this.fleet.length, 7) * 44 + 30;
+    const by = GY + Math.max(this.fleet.length, 5) * 36 + 16;
 
     this.drawBtn(ctx, px, by, 120, 36, "SHUFFLE");
     this.drawBtn(ctx, px + 140, by, 100, 36, "TRASH");
 
-    const rotateBtnY = GY + Math.max(this.fleet.length, 7) * 44 + 80;
+    const rotateBtnY = by + 50;
+    this.drawRotateBtn(ctx, px, rotateBtnY);
+
     const playBtnY = rotateBtnY + 50;
     if (this.allPlaced) {
       const hover = this.inRect(this.mx, this.my, px, playBtnY, 260, 48);
@@ -294,15 +387,6 @@ export class PlacementScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(label, x + w / 2, y + h / 2);
-  }
-
-  private drawMuteIcon(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = "#222";
-    ctx.fillRect(CANVAS_W - 56, 16, 32, 28);
-    ctx.font = "20px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 40, 30);
   }
 
   private drawRotateBtn(ctx: CanvasRenderingContext2D, x: number, y: number): void {
