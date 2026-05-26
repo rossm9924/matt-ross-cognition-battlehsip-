@@ -112,7 +112,7 @@ export class BattleScene implements GameScene {
             this.isoY(res.coord.row, res.coord.col, this.phase === "enemy_anim"),
           );
         }
-        setTimeout(done, 600);
+        setTimeout(done, 1000);
       }
     }
 
@@ -188,7 +188,7 @@ export class BattleScene implements GameScene {
           return;
         }
         this.phase = "enemy_turn";
-        setTimeout(() => this.doEnemyTurn(), 600 + Math.random() * 300);
+        setTimeout(() => this.doEnemyTurn(), 800 + Math.random() * 300);
       });
     });
   }
@@ -254,8 +254,11 @@ export class BattleScene implements GameScene {
       for (let c = 0; c < GRID_SIZE; c++) {
         const st = this.enemyBoard.grid[r][c];
         if (st === "hit") {
-          ctx.fillStyle = `rgba(255,42,42,0.9)`;
-          ctx.fillRect(RGX + c * CELL + 3, RGY + r * CELL + 3, CELL - 6, CELL - 6);
+          ctx.fillStyle = `rgba(255,42,42,1.0)`;
+          ctx.fillRect(RGX + c * CELL + 2, RGY + r * CELL + 2, CELL - 4, CELL - 4);
+          ctx.strokeStyle = "#ff6600";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(RGX + c * CELL + 2, RGY + r * CELL + 2, CELL - 4, CELL - 4);
         } else if (st === "miss") {
           ctx.fillStyle = `rgba(34,102,34,0.5)`;
           ctx.fillRect(RGX + c * CELL + 4, RGY + r * CELL + 4, CELL - 8, CELL - 8);
@@ -396,7 +399,7 @@ export class BattleScene implements GameScene {
 
         let fill = "#2a6fb2";
         let alpha = 0.6;
-        if (state === "hit") { fill = "#ff2a2a"; alpha = 0.8; }
+        if (state === "hit") { fill = "#ff2a2a"; alpha = 1.0; }
         else if (state === "miss") { fill = "#ddeeff"; alpha = 0.4; }
         else if (showShips && state === "ship") { fill = "#778899"; alpha = 0.7; }
 
@@ -515,7 +518,7 @@ export class BattleScene implements GameScene {
       midX: (fromOx + toX) / 2,
       midY: Math.min(fromOy, toY) - 120,
       t: 0,
-      duration: 0.6,
+      duration: 1.5,
       result,
       onDone,
     };
@@ -532,27 +535,27 @@ export class BattleScene implements GameScene {
   }
 
   private spawnExplosion(x: number, y: number): void {
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       this.particles.push({
-        x: x + (Math.random() - 0.5) * 10,
-        y: y + (Math.random() - 0.5) * 10,
-        r: 4 + Math.random() * 6,
-        color: i < 4 ? hex(C.FLAME) : (i < 6 ? hex(C.HIT_RED) : hex(C.SMOKE)),
-        life: 0.4 + Math.random() * 0.3,
-        maxLife: 0.7,
+        x: x + (Math.random() - 0.5) * 14,
+        y: y + (Math.random() - 0.5) * 14,
+        r: 5 + Math.random() * 8,
+        color: i < 5 ? hex(C.FLAME) : (i < 9 ? hex(C.HIT_RED) : hex(C.SMOKE)),
+        life: 0.6 + Math.random() * 0.4,
+        maxLife: 1.0,
       });
     }
   }
 
   private spawnSplash(x: number, y: number): void {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       this.particles.push({
-        x: x + (Math.random() - 0.5) * 8,
-        y: y + (Math.random() - 0.5) * 8,
-        r: 3 + Math.random() * 4,
+        x: x + (Math.random() - 0.5) * 12,
+        y: y + (Math.random() - 0.5) * 12,
+        r: 4 + Math.random() * 5,
         color: hex(C.FOAM),
-        life: 0.3 + Math.random() * 0.2,
-        maxLife: 0.5,
+        life: 0.5 + Math.random() * 0.3,
+        maxLife: 0.8,
       });
     }
   }

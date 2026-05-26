@@ -50,9 +50,9 @@ export class PlacementScene implements GameScene {
 
     ctx.font = `13px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()}`, CANVAS_W / 2, 55);
+    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()}`, CANVAS_W / 2, 50);
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(this.msg, CANVAS_W / 2, 78);
+    ctx.fillText(this.msg, CANVAS_W / 2, 70);
 
     // Grid
     this.drawGrid(ctx);
@@ -110,6 +110,13 @@ export class PlacementScene implements GameScene {
       this.selected = null;
       this.allPlaced = false;
       this.msg = "Grid cleared. Select a ship to place.";
+      return;
+    }
+
+    // Rotate button
+    const rotateBtnY = GY + Math.max(this.fleet.length, 7) * 44 + 80;
+    if (this.inRect(x, y, px, rotateBtnY, 260, 36)) {
+      this.toggleOrientation();
       return;
     }
 
@@ -232,7 +239,7 @@ export class PlacementScene implements GameScene {
     ctx.textBaseline = "middle";
     ctx.font = `15px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("YOUR FLEET", px, py - 20);
+    ctx.fillText("YOUR FLEET", px, py - 30);
 
     this.remaining.forEach((cfg, i) => {
       const iy = py + i * 44;
@@ -248,10 +255,8 @@ export class PlacementScene implements GameScene {
       ctx.fillText(cfg.name, px + w + 10, iy + 10);
     });
 
-    ctx.font = `11px ${FONT}`;
-    ctx.fillStyle = hex(C.DIM_GREEN);
-    const by = GY + Math.max(this.fleet.length, 7) * 44 + 80;
-    ctx.fillText(`Orientation: ${this.orientation.toUpperCase()} (R)`, px, by);
+    const rotateBtnY = GY + Math.max(this.fleet.length, 7) * 44 + 80;
+    this.drawRotateBtn(ctx, px, rotateBtnY);
   }
 
   private drawButtons(ctx: CanvasRenderingContext2D): void {
@@ -294,6 +299,19 @@ export class PlacementScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 40, 30);
+  }
+
+  private drawRotateBtn(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    const hover = this.inRect(this.mx, this.my, x, y, 260, 36);
+    ctx.fillStyle = hover ? hex(C.GREEN) : hex(C.DIM_GREEN);
+    ctx.beginPath();
+    ctx.roundRect(x, y, 260, 36, 6);
+    ctx.fill();
+    ctx.fillStyle = "#000";
+    ctx.font = `13px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`↻  ${this.orientation.toUpperCase()}  (R to rotate)`, x + 130, y + 18);
   }
 
   private inRect(px: number, py: number, rx: number, ry: number, rw: number, rh: number): boolean {
