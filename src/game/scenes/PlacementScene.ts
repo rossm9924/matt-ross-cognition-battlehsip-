@@ -30,6 +30,7 @@ export class PlacementScene implements GameScene {
   private msg = "Select a ship to place";
   private allPlaced = false;
   private pickedOrigin: { row: number; col: number } | null = null;
+  private showInfo = false;
 
   enter(engine: Engine): void {
     this.engine = engine;
@@ -41,6 +42,7 @@ export class PlacementScene implements GameScene {
     this.msg = "Select a ship to place";
     this.pickedOrigin = null;
     this.board = new Board();
+    this.showInfo = false;
   }
 
   update(): void {}
@@ -72,6 +74,40 @@ export class PlacementScene implements GameScene {
     this.drawPreview(ctx);
     this.drawPalette(ctx);
     this.drawButtons(ctx);
+
+    // Rules tooltip on hover
+    if (this.mx < 60 && this.my < 50 && !this.showInfo) {
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.beginPath();
+      ctx.roundRect(50, 16, 64, 26, 4);
+      ctx.fill();
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.font = `12px ${FONT}`;
+      ctx.textAlign = "left";
+      ctx.fillText("RULES", 58, 30);
+      ctx.textAlign = "center";
+    }
+
+    // Info overlay
+    if (this.showInfo) {
+      ctx.fillStyle = "rgba(0,0,0,0.88)";
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.font = `18px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const lines = [
+        "BATTLESHIP WAR — RULES", "",
+        "Place your fleet on the 10×10 grid.",
+        "Take turns firing at the enemy grid.",
+        "Hit = red marker, Miss = white dot.",
+        "Sink all enemy ships to win!", "",
+        "Use arrow keys + Enter to fire.",
+        "R to rotate ships during placement.", "",
+        "Click anywhere to close.",
+      ];
+      lines.forEach((l, i) => ctx.fillText(l, CANVAS_W / 2, CANVAS_H / 2 - 120 + i * 28));
+    }
   }
 
   onMouseMove(x: number, y: number): void {
@@ -82,6 +118,18 @@ export class PlacementScene implements GameScene {
   onMouseDown(x: number, y: number, button: number): void {
     if (button === 2) {
       this.toggleOrientation();
+      return;
+    }
+
+    // Close overlay
+    if (this.showInfo) {
+      this.showInfo = false;
+      return;
+    }
+
+    // Help button (slightly larger hit area)
+    if (x < 60 && y < 50) {
+      this.showInfo = true;
       return;
     }
 
