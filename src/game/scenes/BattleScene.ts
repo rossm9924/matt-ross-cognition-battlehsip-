@@ -10,14 +10,19 @@ import { Engine, GameScene } from "../Engine";
 
 type Phase = "player_turn" | "animating" | "enemy_turn" | "enemy_anim";
 
-// Dual-grid layout: player grid left, enemy grid right
-const CELL = 28;
-const GRID_PX = GRID_SIZE * CELL; // 280px for 10×10
+// Dual-grid layout: center just the two grids on canvas, fleet panels float to the right
+const CELL = 36;
+const GRID_PX = GRID_SIZE * CELL; // 360px for 10×10
 
-const P_GX = 40;  // player grid X
-const P_GY = 80;  // player grid Y
-const E_GX = 460;  // enemy grid X
-const E_GY = 80;  // enemy grid Y
+const GRID_GAP = 60;         // gap between the two grids
+const LABEL_MARGIN = 14;     // row label space left of each grid
+const TWO_GRIDS_W = LABEL_MARGIN + GRID_PX + GRID_GAP + LABEL_MARGIN + GRID_PX;
+const BLOCK_X = Math.round((CANVAS_W - TWO_GRIDS_W) / 2);
+
+const P_GX = BLOCK_X + LABEL_MARGIN;                           // player grid X
+const P_GY = 130;                                               // player grid Y
+const E_GX = P_GX + GRID_PX + GRID_GAP + LABEL_MARGIN;        // enemy grid X
+const E_GY = 130;                                               // enemy grid Y
 
 interface LogEntry {
   text: string;
@@ -43,6 +48,7 @@ export class BattleScene implements GameScene {
   private status = "YOUR TURN — Click enemy grid to fire";
   private sweepX = 0;
   private fleet!: ShipConfig[];
+  private showInfo = false;
   private log: LogEntry[] = [];
   private sunkBanner: SunkBanner | null = null;
 
@@ -66,6 +72,7 @@ export class BattleScene implements GameScene {
     this.cursorRow = 0;
     this.cursorCol = 0;
     this.cursorActive = false;
+    this.showInfo = false;
     this.status = "YOUR TURN — Click enemy grid to fire";
     engine.resetStats();
   }
@@ -93,6 +100,7 @@ export class BattleScene implements GameScene {
     this.renderBattleLog(ctx);
     this.renderHUD(ctx);
     this.renderSunkBanner(ctx);
+    this.renderInfoOverlay(ctx);
   }
 
   onMouseMove(x: number, y: number): void {
@@ -102,18 +110,26 @@ export class BattleScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
+    // Close overlay
+    if (this.showInfo) {
+      this.showInfo = false;
+      return;
+    }
+    // Help icon
+    if (x < 60 && y < 50) {
+      this.showInfo = true;
+      return;
+    }
     // Mute
     if (x > CANVAS_W - 70 && y < 50) {
       this.engine.audio.toggleMute();
       return;
     }
     // Quit to title
-    if (x >= CANVAS_W / 2 - 40 && x <= CANVAS_W / 2 + 40 && y >= 4 && y <= 28) {
+    if (x >= CANVAS_W / 2 + 80 && x <= CANVAS_W / 2 + 160 && y < 36) {
       this.engine.switchScene(SCENES.TITLE);
       return;
     }
-    // Help icon
-    if (x < 60 && y < 50) return;
 
     if (this.phase !== "player_turn") return;
 
@@ -199,36 +215,38 @@ export class BattleScene implements GameScene {
 
   private renderTopBar(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = "rgba(17,17,17,0.9)";
-    ctx.fillRect(0, 0, CANVAS_W, 32);
+    ctx.fillRect(0, 0, CANVAS_W, 36);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+
+    // Title
     ctx.font = `18px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("BATTLE STATION", CANVAS_W / 2, 16);
+    ctx.fillText("BATTLE STATION", CANVAS_W / 2, 18);
 
     // Help
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText("?", 20, 16);
+    ctx.fillText("?", 20, 18);
 
     // Quit
     ctx.font = `10px ${FONT}`;
-    const qHover = this.mx >= CANVAS_W / 2 - 40 && this.mx <= CANVAS_W / 2 + 40 &&
-                   this.my >= 4 && this.my <= 28;
-    ctx.fillStyle = qHover ? hex(C.GREEN) : "transparent";
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("QUIT", CANVAS_W / 2 + 120, 18);
 
     // Mute
     ctx.font = "16px sans-serif";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 30, 16);
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 30, 18);
 
     // Mute label on hover
-    if (this.mx > CANVAS_W - 60 && this.my < 32) {
+    if (this.mx > CANVAS_W - 60 && this.my < 36) {
       ctx.fillStyle = "rgba(0,0,0,0.85)";
-      ctx.fillRect(CANVAS_W - 90, 34, 60, 20);
+      ctx.fillRect(CANVAS_W - 90, 38, 60, 20);
       ctx.fillStyle = hex(C.GREEN);
       ctx.font = `10px ${FONT}`;
-      ctx.fillText("SOUND", CANVAS_W - 60, 44);
+      ctx.fillText("SOUND", CANVAS_W - 60, 48);
     }
   }
 
@@ -480,18 +498,21 @@ export class BattleScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Status bar
+    // Status bar — positioned between top bar and grid titles
+    const statusY = 42;
+    const statusH = 28;
     ctx.fillStyle = "rgba(17,17,17,0.8)";
-    ctx.fillRect(P_GX, 36, GRID_PX * 2 + (E_GX - P_GX - GRID_PX) + GRID_PX, 26);
+    ctx.fillRect(P_GX - LABEL_MARGIN, statusY, E_GX + GRID_PX - P_GX + LABEL_MARGIN, statusH);
     ctx.font = `12px ${FONT}`;
     ctx.fillStyle = this.phase === "player_turn" ? hex(C.GREEN) : hex(C.DIM_GREEN);
-    ctx.fillText(this.status, (P_GX + E_GX + GRID_PX) / 2, 49);
+    ctx.fillText(this.status, (P_GX + E_GX + GRID_PX) / 2, statusY + statusH / 2);
 
-    // Score
+    // Score — positioned below grids, near battle log
+    const bottomY = P_GY + GRID_PX + 50;
     ctx.textAlign = "right";
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(`SCORE: ${this.score}`, CANVAS_W - 30, CANVAS_H - 20);
+    ctx.fillText(`SCORE: ${this.score}`, CANVAS_W - 30, bottomY);
 
     // Turn indicator
     ctx.textAlign = "center";
@@ -508,7 +529,7 @@ export class BattleScene implements GameScene {
     ctx.textAlign = "left";
     ctx.font = `9px ${FONT}`;
     ctx.fillStyle = hex(C.DARK_GREEN);
-    ctx.fillText("Arrow keys + Enter to fire", E_GX, CANVAS_H - 14);
+    ctx.fillText("Arrow keys + Enter to fire", E_GX, bottomY + 16);
   }
 
   private renderSunkBanner(ctx: CanvasRenderingContext2D): void {
@@ -529,6 +550,27 @@ export class BattleScene implements GameScene {
     ctx.fillStyle = hex(C.FLAME);
     ctx.fillText(this.sunkBanner.text, CANVAS_W / 2, this.sunkBanner.y);
     ctx.restore();
+  }
+
+  private renderInfoOverlay(ctx: CanvasRenderingContext2D): void {
+    if (!this.showInfo) return;
+    ctx.fillStyle = "rgba(0,0,0,0.88)";
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.font = `18px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const lines = [
+      "BATTLESHIP WAR — RULES", "",
+      "Place your fleet on the 10×10 grid.",
+      "Take turns firing at the enemy grid.",
+      "Hit = red marker, Miss = white dot.",
+      "Sink all enemy ships to win!", "",
+      "Use arrow keys + Enter to fire.",
+      "R to rotate ships during placement.", "",
+      "Click anywhere to close.",
+    ];
+    lines.forEach((l, i) => ctx.fillText(l, CANVAS_W / 2, CANVAS_H / 2 - 120 + i * 28));
   }
 
   /* ============ AI ============ */

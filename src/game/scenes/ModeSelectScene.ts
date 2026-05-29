@@ -7,10 +7,12 @@ export class ModeSelectScene implements GameScene {
   private mx = 0;
   private my = 0;
   private selectedDifficulty: Difficulty = "normal";
+  private showInfo = false;
 
   enter(engine: Engine): void {
     this.engine = engine;
     this.selectedDifficulty = engine.difficulty;
+    this.showInfo = false;
   }
 
   update(): void {}
@@ -40,22 +42,22 @@ export class ModeSelectScene implements GameScene {
     ctx.textBaseline = "middle";
     ctx.font = `42px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("GAME MODE", cx, 80);
+    ctx.fillText("GAME MODE", cx, 130);
 
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText("Select your battle configuration", cx, 115);
+    ctx.fillText("Select your battle configuration", cx, 165);
 
     // Mode tiles
-    this.drawTile(ctx, cx - 180, 150, "CLASSIC",
+    this.drawTile(ctx, cx - 180, 200, "CLASSIC",
       "Standard 10×10 grid\n5 ships: Carrier, Battleship,\nCruiser, Submarine, Destroyer",
       [5, 4, 3, 3, 2]);
-    this.drawTile(ctx, cx + 180, 150, "ADVANCED",
+    this.drawTile(ctx, cx + 180, 200, "ADVANCED",
       "Standard 10×10 grid\n7 ships: adds Frigate\nand Patrol Boat",
       [5, 4, 3, 3, 3, 2, 2]);
 
     // Difficulty selector
-    this.drawDifficultySelector(ctx, cx, 530);
+    this.drawDifficultySelector(ctx, cx, 580);
 
     // Mute label on hover
     if (this.mx > W - 60 && this.my < 36) {
@@ -66,6 +68,40 @@ export class ModeSelectScene implements GameScene {
       ctx.textAlign = "center";
       ctx.fillText("SOUND", W - 60, 48);
     }
+
+    // Rules tooltip on hover
+    if (this.mx < 60 && this.my < 50 && !this.showInfo) {
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.beginPath();
+      ctx.roundRect(50, 16, 64, 26, 4);
+      ctx.fill();
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.font = `12px ${FONT}`;
+      ctx.textAlign = "left";
+      ctx.fillText("RULES", 58, 30);
+      ctx.textAlign = "center";
+    }
+
+    // Info overlay
+    if (this.showInfo) {
+      ctx.fillStyle = "rgba(0,0,0,0.88)";
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.font = `18px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const lines = [
+        "BATTLESHIP WAR — RULES", "",
+        "Place your fleet on the 10×10 grid.",
+        "Take turns firing at the enemy grid.",
+        "Hit = red marker, Miss = white dot.",
+        "Sink all enemy ships to win!", "",
+        "Use arrow keys + Enter to fire.",
+        "R to rotate ships during placement.", "",
+        "Click anywhere to close.",
+      ];
+      lines.forEach((l, i) => ctx.fillText(l, cx, H / 2 - 120 + i * 28));
+    }
   }
 
   onMouseMove(x: number, y: number): void {
@@ -74,6 +110,16 @@ export class ModeSelectScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
+    // Close overlay
+    if (this.showInfo) {
+      this.showInfo = false;
+      return;
+    }
+    // Help button
+    if (x < 60 && y < 50) {
+      this.showInfo = true;
+      return;
+    }
     // Mute
     if (x > CANVAS_W - 70 && y < 50) {
       this.engine.audio.toggleMute();
@@ -88,11 +134,11 @@ export class ModeSelectScene implements GameScene {
     const cx = CANVAS_W / 2;
 
     // Classic tile
-    if (this.inRect(x, y, cx - 180 - 130, 150, 260, 340)) {
+    if (this.inRect(x, y, cx - 180 - 130, 200, 260, 340)) {
       this.selectMode("classic");
     }
     // Advanced tile
-    if (this.inRect(x, y, cx + 180 - 130, 150, 260, 340)) {
+    if (this.inRect(x, y, cx + 180 - 130, 200, 260, 340)) {
       this.selectMode("advanced");
     }
 
@@ -102,7 +148,7 @@ export class ModeSelectScene implements GameScene {
     const totalW = difficulties.length * btnW + (difficulties.length - 1) * 16;
     let bx = cx - totalW / 2;
     for (const diff of difficulties) {
-      if (this.inRect(x, y, bx, 560, btnW, 36)) {
+      if (this.inRect(x, y, bx, 610, btnW, 36)) {
         this.selectedDifficulty = diff;
         this.engine.difficulty = diff;
       }
@@ -185,7 +231,7 @@ export class ModeSelectScene implements GameScene {
     const shipNames = title === "CLASSIC"
       ? ["Carrier", "Battleship", "Cruiser", "Submarine", "Destroyer"]
       : ["Carrier", "Battleship", "Cruiser", "Submarine", "Destroyer", "Frigate", "Patrol"];
-    ctx.fillStyle = "rgba(51,255,51,0.6)";
+    ctx.fillStyle = "rgba(0,60,0,0.7)";
     ships.forEach((len, i) => {
       const sw = len * 20;
       ctx.beginPath();
@@ -193,11 +239,11 @@ export class ModeSelectScene implements GameScene {
       ctx.fill();
 
       ctx.font = `9px ${FONT}`;
-      ctx.fillStyle = hex(C.DIM_GREEN);
+      ctx.fillStyle = hex(C.GREEN);
       ctx.textAlign = "left";
       ctx.fillText(shipNames[i] || "", x - sw / 2 + sw - 20, y + 72 + i * 26);
       ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(51,255,51,0.6)";
+      ctx.fillStyle = "rgba(0,60,0,0.7)";
     });
 
     // Description
