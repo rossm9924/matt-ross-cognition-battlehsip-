@@ -185,7 +185,7 @@ export class ModeSelectScene implements GameScene {
     const shipNames = title === "CLASSIC"
       ? ["Carrier", "Battleship", "Cruiser", "Submarine", "Destroyer"]
       : ["Carrier", "Battleship", "Cruiser", "Submarine", "Destroyer", "Frigate", "Patrol"];
-    ctx.fillStyle = "rgba(51,255,51,0.6)";
+    ctx.fillStyle = "rgba(0,60,0,0.7)";
     ships.forEach((len, i) => {
       const sw = len * 20;
       ctx.beginPath();
@@ -193,11 +193,11 @@ export class ModeSelectScene implements GameScene {
       ctx.fill();
 
       ctx.font = `9px ${FONT}`;
-      ctx.fillStyle = hex(C.DIM_GREEN);
+      ctx.fillStyle = hex(C.GREEN);
       ctx.textAlign = "left";
       ctx.fillText(shipNames[i] || "", x - sw / 2 + sw - 20, y + 72 + i * 26);
       ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(51,255,51,0.6)";
+      ctx.fillStyle = "rgba(0,60,0,0.7)";
     });
 
     // Description

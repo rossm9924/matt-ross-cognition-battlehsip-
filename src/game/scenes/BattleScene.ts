@@ -10,14 +10,21 @@ import { Engine, GameScene } from "../Engine";
 
 type Phase = "player_turn" | "animating" | "enemy_turn" | "enemy_anim";
 
-// Dual-grid layout: player grid left, enemy grid right
+// Dual-grid layout: player grid left, enemy grid right, centered on canvas
 const CELL = 28;
 const GRID_PX = GRID_SIZE * CELL; // 280px for 10×10
 
-const P_GX = 40;  // player grid X
-const P_GY = 80;  // player grid Y
-const E_GX = 460;  // enemy grid X
-const E_GY = 80;  // enemy grid Y
+const GRID_GAP = 100;        // gap between the two grids
+const FLEET_GAP = 24;        // gap before fleet panels
+const FLEET_W = 200;         // approx fleet panel width
+const LABEL_MARGIN = 14;     // row label space left of each grid
+const TOTAL_W = LABEL_MARGIN + GRID_PX + GRID_GAP + LABEL_MARGIN + GRID_PX + FLEET_GAP + FLEET_W;
+const BLOCK_X = Math.round((CANVAS_W - TOTAL_W) / 2);
+
+const P_GX = BLOCK_X + LABEL_MARGIN;                           // player grid X
+const P_GY = 100;                                               // player grid Y (push down for status bar)
+const E_GX = P_GX + GRID_PX + GRID_GAP + LABEL_MARGIN;        // enemy grid X
+const E_GY = 100;                                               // enemy grid Y
 
 interface LogEntry {
   text: string;
@@ -108,7 +115,7 @@ export class BattleScene implements GameScene {
       return;
     }
     // Quit to title
-    if (x >= CANVAS_W / 2 - 40 && x <= CANVAS_W / 2 + 40 && y >= 4 && y <= 28) {
+    if (x >= CANVAS_W / 2 + 80 && x <= CANVAS_W / 2 + 160 && y < 36) {
       this.engine.switchScene(SCENES.TITLE);
       return;
     }
@@ -199,36 +206,38 @@ export class BattleScene implements GameScene {
 
   private renderTopBar(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = "rgba(17,17,17,0.9)";
-    ctx.fillRect(0, 0, CANVAS_W, 32);
+    ctx.fillRect(0, 0, CANVAS_W, 36);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+
+    // Title
     ctx.font = `18px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("BATTLE STATION", CANVAS_W / 2, 16);
+    ctx.fillText("BATTLE STATION", CANVAS_W / 2, 18);
 
     // Help
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText("?", 20, 16);
+    ctx.fillText("?", 20, 18);
 
     // Quit
     ctx.font = `10px ${FONT}`;
-    const qHover = this.mx >= CANVAS_W / 2 - 40 && this.mx <= CANVAS_W / 2 + 40 &&
-                   this.my >= 4 && this.my <= 28;
-    ctx.fillStyle = qHover ? hex(C.GREEN) : "transparent";
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("QUIT", CANVAS_W / 2 + 120, 18);
 
     // Mute
     ctx.font = "16px sans-serif";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 30, 16);
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 30, 18);
 
     // Mute label on hover
-    if (this.mx > CANVAS_W - 60 && this.my < 32) {
+    if (this.mx > CANVAS_W - 60 && this.my < 36) {
       ctx.fillStyle = "rgba(0,0,0,0.85)";
-      ctx.fillRect(CANVAS_W - 90, 34, 60, 20);
+      ctx.fillRect(CANVAS_W - 90, 38, 60, 20);
       ctx.fillStyle = hex(C.GREEN);
       ctx.font = `10px ${FONT}`;
-      ctx.fillText("SOUND", CANVAS_W - 60, 44);
+      ctx.fillText("SOUND", CANVAS_W - 60, 48);
     }
   }
 
@@ -480,12 +489,14 @@ export class BattleScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Status bar
+    // Status bar — positioned between top bar and grid titles
+    const statusY = 42;
+    const statusH = 28;
     ctx.fillStyle = "rgba(17,17,17,0.8)";
-    ctx.fillRect(P_GX, 36, GRID_PX * 2 + (E_GX - P_GX - GRID_PX) + GRID_PX, 26);
+    ctx.fillRect(P_GX - LABEL_MARGIN, statusY, E_GX + GRID_PX - P_GX + LABEL_MARGIN, statusH);
     ctx.font = `12px ${FONT}`;
     ctx.fillStyle = this.phase === "player_turn" ? hex(C.GREEN) : hex(C.DIM_GREEN);
-    ctx.fillText(this.status, (P_GX + E_GX + GRID_PX) / 2, 49);
+    ctx.fillText(this.status, (P_GX + E_GX + GRID_PX) / 2, statusY + statusH / 2);
 
     // Score
     ctx.textAlign = "right";

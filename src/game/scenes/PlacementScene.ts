@@ -8,7 +8,12 @@ import { Orientation } from "../types";
 import { Engine, GameScene } from "../Engine";
 
 const CELL = 38;
-const GX = 80;
+const GRID_W = GRID_SIZE * CELL;          // 380
+const PALETTE_GAP = 40;
+const PALETTE_W = 260;
+const LABEL_W = 20;
+const TOTAL_BLOCK = LABEL_W + GRID_W + PALETTE_GAP + PALETTE_W; // 700
+const GX = Math.round((CANVAS_W - TOTAL_BLOCK) / 2) + LABEL_W;  // center block, then offset past labels
 const GY = 100;
 
 export class PlacementScene implements GameScene {
@@ -47,17 +52,17 @@ export class PlacementScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Title
+    // Title — centered over the entire grid+palette block
+    const blockCenterX = GX + GRID_W / 2 + (PALETTE_GAP + PALETTE_W) / 2;
     ctx.font = `30px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("STRATEGY PANEL", CANVAS_W / 2, 55);
+    ctx.fillText("STRATEGY PANEL", blockCenterX, 55);
 
-    const gridCenterX = GX + (GRID_SIZE * CELL) / 2;
     ctx.font = `13px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()} | Difficulty: ${this.engine.difficulty.toUpperCase()}`, gridCenterX, 78);
+    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()} | Difficulty: ${this.engine.difficulty.toUpperCase()}`, blockCenterX, 78);
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(this.msg, gridCenterX, 94);
+    ctx.fillText(this.msg, blockCenterX, 94);
 
     // Grid
     this.drawGrid(ctx);
