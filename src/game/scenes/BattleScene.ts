@@ -22,8 +22,7 @@ const E_GY = 80;  // enemy grid Y
 // Mobile portrait layout: single large grid centered
 const M_CELL = 56;
 const M_GRID_PX = GRID_SIZE * M_CELL; // 560px
-const M_GX = (CANVAS_W - M_GRID_PX) / 2; // centered
-const M_GY = 100;
+// M_GX and M_GY are computed dynamically from engine dimensions
 
 interface LogEntry {
   text: string;
@@ -94,7 +93,7 @@ export class BattleScene implements GameScene {
   render(ctx: CanvasRenderingContext2D): void {
     // Full CRT/radar background
     ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillRect(0, 0, this.engine.width, this.engine.height);
 
     this.renderTopBar(ctx);
 
@@ -124,13 +123,14 @@ export class BattleScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
+    const W = this.engine.width;
     // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
+    if (x > W - 70 && y < 50) {
       this.engine.audio.toggleMute();
       return;
     }
     // Quit to title
-    if (x >= CANVAS_W / 2 - 40 && x <= CANVAS_W / 2 + 40 && y >= 4 && y <= 28) {
+    if (x >= W / 2 - 40 && x <= W / 2 + 40 && y >= 4 && y <= 28) {
       this.engine.switchScene(SCENES.TITLE);
       return;
     }
@@ -139,10 +139,10 @@ export class BattleScene implements GameScene {
 
     // Mobile grid toggle tabs
     if (this.engine.portrait) {
-      const tabY = 36;
+      const tabY = this.mGY - 44;
       const tabH = 30;
       if (y >= tabY && y <= tabY + tabH) {
-        if (x < CANVAS_W / 2) {
+        if (x < W / 2) {
           this.mobileView = "enemy";
         } else {
           this.mobileView = "player";
@@ -208,7 +208,7 @@ export class BattleScene implements GameScene {
         this.sunkBanner = {
           text: `${result.sunkShip.config.name.toUpperCase()} DESTROYED`,
           alpha: 1.5,
-          y: CANVAS_H / 2 - 20,
+          y: this.engine.height / 2 - 20,
         };
       } else {
         this.status = `HIT at ${ROW_LABELS[row]}${COL_LABELS[col]}!`;
@@ -242,14 +242,15 @@ export class BattleScene implements GameScene {
   /* ============ RENDER SECTIONS ============ */
 
   private renderTopBar(ctx: CanvasRenderingContext2D): void {
+    const W = this.engine.width;
     ctx.fillStyle = "rgba(17,17,17,0.9)";
-    ctx.fillRect(0, 0, CANVAS_W, 32);
+    ctx.fillRect(0, 0, W, 32);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `18px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("BATTLE STATION", CANVAS_W / 2, 16);
+    ctx.fillText("BATTLE STATION", W / 2, 16);
 
     // Help
     ctx.font = `14px ${FONT}`;
@@ -258,21 +259,21 @@ export class BattleScene implements GameScene {
 
     // Quit
     ctx.font = `10px ${FONT}`;
-    const qHover = this.mx >= CANVAS_W / 2 - 40 && this.mx <= CANVAS_W / 2 + 40 &&
+    const qHover = this.mx >= W / 2 - 40 && this.mx <= W / 2 + 40 &&
                    this.my >= 4 && this.my <= 28;
     ctx.fillStyle = qHover ? hex(C.GREEN) : "transparent";
 
     // Mute
     ctx.font = "16px sans-serif";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 30, 16);
+    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", W - 30, 16);
 
     // Mute label on hover
-    if (this.mx > CANVAS_W - 60 && this.my < 32) {
+    if (this.mx > W - 60 && this.my < 32) {
       ctx.fillStyle = "rgba(0,0,0,0.85)";
-      ctx.fillRect(CANVAS_W - 90, 34, 60, 20);
+      ctx.fillRect(W - 90, 34, 60, 20);
       ctx.fillStyle = hex(C.GREEN);
       ctx.font = `10px ${FONT}`;
-      ctx.fillText("SOUND", CANVAS_W - 60, 44);
+      ctx.fillText("SOUND", W - 60, 44);
     }
   }
 
@@ -521,19 +522,21 @@ export class BattleScene implements GameScene {
   }
 
   private renderHUD(ctx: CanvasRenderingContext2D): void {
+    const W = this.engine.width;
+    const H = this.engine.height;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     if (this.engine.portrait) {
       // Mobile HUD: status at bottom, score in corner
       ctx.fillStyle = "rgba(17,17,17,0.9)";
-      ctx.fillRect(0, CANVAS_H - 50, CANVAS_W, 50);
+      ctx.fillRect(0, H - 50, W, 50);
       ctx.font = `16px ${FONT}`;
       ctx.fillStyle = this.phase === "player_turn" ? hex(C.GREEN) : hex(C.DIM_GREEN);
-      ctx.fillText(this.status, CANVAS_W / 2, CANVAS_H - 28);
+      ctx.fillText(this.status, W / 2, H - 28);
       ctx.font = `12px ${FONT}`;
       ctx.fillStyle = hex(C.GREEN);
-      ctx.fillText(`SCORE: ${this.score}`, CANVAS_W / 2, CANVAS_H - 10);
+      ctx.fillText(`SCORE: ${this.score}`, W / 2, H - 10);
       return;
     }
 
@@ -577,15 +580,16 @@ export class BattleScene implements GameScene {
     ctx.textBaseline = "middle";
 
     // Banner background
+    const W = this.engine.width;
     ctx.fillStyle = "rgba(255,42,42,0.15)";
-    ctx.fillRect(0, this.sunkBanner.y - 20, CANVAS_W, 40);
+    ctx.fillRect(0, this.sunkBanner.y - 20, W, 40);
 
     ctx.font = `28px ${FONT}`;
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 3;
-    ctx.strokeText(this.sunkBanner.text, CANVAS_W / 2, this.sunkBanner.y);
+    ctx.strokeText(this.sunkBanner.text, W / 2, this.sunkBanner.y);
     ctx.fillStyle = hex(C.FLAME);
-    ctx.fillText(this.sunkBanner.text, CANVAS_W / 2, this.sunkBanner.y);
+    ctx.fillText(this.sunkBanner.text, W / 2, this.sunkBanner.y);
     ctx.restore();
   }
 
@@ -607,7 +611,7 @@ export class BattleScene implements GameScene {
         this.sunkBanner = {
           text: `YOUR ${result.sunkShip.config.name.toUpperCase()} SUNK`,
           alpha: 1.5,
-          y: CANVAS_H / 2 - 20,
+          y: this.engine.height / 2 - 20,
         };
       } else {
         this.status = `AI hit at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}!`;
@@ -635,11 +639,24 @@ export class BattleScene implements GameScene {
 
   /* ============ MOBILE RENDERING ============ */
 
+  private get mGX(): number {
+    return (this.engine.width - M_GRID_PX) / 2;
+  }
+
+  private get mGY(): number {
+    // Center content vertically: top bar(36) + tab(30) + gap + grid(560) + fleet(100) ≈ 780
+    return (this.engine.height - 780) / 2 + 80;
+  }
+
   private renderMobileView(ctx: CanvasRenderingContext2D): void {
+    const W = this.engine.width;
+    const mgx = this.mGX;
+    const mgy = this.mGY;
+
     // Tab bar for switching grids
-    const tabY = 36;
+    const tabY = mgy - 44;
     const tabH = 30;
-    const halfW = CANVAS_W / 2;
+    const halfW = W / 2;
 
     // Enemy tab
     ctx.fillStyle = this.mobileView === "enemy" ? hex(C.DARK_GREEN) : "rgba(17,17,17,0.9)";
@@ -665,7 +682,7 @@ export class BattleScene implements GameScene {
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(0, tabY + tabH);
-    ctx.lineTo(CANVAS_W, tabY + tabH);
+    ctx.lineTo(W, tabY + tabH);
     ctx.stroke();
 
     if (this.mobileView === "enemy") {
@@ -679,25 +696,27 @@ export class BattleScene implements GameScene {
   }
 
   private renderMobileEnemyGrid(ctx: CanvasRenderingContext2D): void {
+    const mgx = this.mGX;
+    const mgy = this.mGY;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     // Grid border
     ctx.strokeStyle = hex(C.GREEN);
     ctx.lineWidth = 2;
-    ctx.strokeRect(M_GX - 1, M_GY - 1, M_GRID_PX + 2, M_GRID_PX + 2);
+    ctx.strokeRect(mgx - 1, mgy - 1, M_GRID_PX + 2, M_GRID_PX + 2);
 
     // Grid lines
     ctx.strokeStyle = "rgba(26,138,26,0.4)";
     ctx.lineWidth = 1;
     for (let i = 0; i <= GRID_SIZE; i++) {
       ctx.beginPath();
-      ctx.moveTo(M_GX, M_GY + i * M_CELL);
-      ctx.lineTo(M_GX + M_GRID_PX, M_GY + i * M_CELL);
+      ctx.moveTo(mgx, mgy + i * M_CELL);
+      ctx.lineTo(mgx + M_GRID_PX, mgy + i * M_CELL);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(M_GX + i * M_CELL, M_GY);
-      ctx.lineTo(M_GX + i * M_CELL, M_GY + M_GRID_PX);
+      ctx.moveTo(mgx + i * M_CELL, mgy);
+      ctx.lineTo(mgx + i * M_CELL, mgy + M_GRID_PX);
       ctx.stroke();
     }
 
@@ -705,10 +724,10 @@ export class BattleScene implements GameScene {
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
     for (let r = 0; r < GRID_SIZE; r++) {
-      ctx.fillText(ROW_LABELS[r], M_GX - 20, M_GY + r * M_CELL + M_CELL / 2);
+      ctx.fillText(ROW_LABELS[r], mgx - 20, mgy + r * M_CELL + M_CELL / 2);
     }
     for (let c = 0; c < GRID_SIZE; c++) {
-      ctx.fillText(COL_LABELS[c], M_GX + c * M_CELL + M_CELL / 2, M_GY + M_GRID_PX + 16);
+      ctx.fillText(COL_LABELS[c], mgx + c * M_CELL + M_CELL / 2, mgy + M_GRID_PX + 16);
     }
 
     // Markers
@@ -717,14 +736,14 @@ export class BattleScene implements GameScene {
         const st = this.enemyBoard.grid[r][c];
         if (st === "hit") {
           ctx.fillStyle = "rgba(255,42,42,1.0)";
-          ctx.fillRect(M_GX + c * M_CELL + 3, M_GY + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
+          ctx.fillRect(mgx + c * M_CELL + 3, mgy + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
           ctx.strokeStyle = "#ff6600";
           ctx.lineWidth = 2;
-          ctx.strokeRect(M_GX + c * M_CELL + 3, M_GY + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
+          ctx.strokeRect(mgx + c * M_CELL + 3, mgy + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
         } else if (st === "miss") {
           ctx.fillStyle = "rgba(200,200,200,0.7)";
           ctx.beginPath();
-          ctx.arc(M_GX + c * M_CELL + M_CELL / 2, M_GY + r * M_CELL + M_CELL / 2, 8, 0, Math.PI * 2);
+          ctx.arc(mgx + c * M_CELL + M_CELL / 2, mgy + r * M_CELL + M_CELL / 2, 8, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -736,7 +755,7 @@ export class BattleScene implements GameScene {
         ctx.strokeStyle = hex(C.HIT_RED);
         ctx.lineWidth = 3;
         for (const cell of ship.cells) {
-          ctx.strokeRect(M_GX + cell.col * M_CELL + 2, M_GY + cell.row * M_CELL + 2, M_CELL - 4, M_CELL - 4);
+          ctx.strokeRect(mgx + cell.col * M_CELL + 2, mgy + cell.row * M_CELL + 2, M_CELL - 4, M_CELL - 4);
         }
       }
     }
@@ -745,15 +764,15 @@ export class BattleScene implements GameScene {
     if (this.phase === "player_turn") {
       const hoverCell = this.mobileCell(this.mx, this.my);
       if (hoverCell) {
-        const cx = M_GX + hoverCell.col * M_CELL + M_CELL / 2;
-        const cy = M_GY + hoverCell.row * M_CELL + M_CELL / 2;
+        const cellCx = mgx + hoverCell.col * M_CELL + M_CELL / 2;
+        const cellCy = mgy + hoverCell.row * M_CELL + M_CELL / 2;
         ctx.strokeStyle = "rgba(51,255,51,0.4)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(M_GX, cy);
-        ctx.lineTo(M_GX + M_GRID_PX, cy);
-        ctx.moveTo(cx, M_GY);
-        ctx.lineTo(cx, M_GY + M_GRID_PX);
+        ctx.moveTo(mgx, cellCy);
+        ctx.lineTo(mgx + M_GRID_PX, cellCy);
+        ctx.moveTo(cellCx, mgy);
+        ctx.lineTo(cellCx, mgy + M_GRID_PX);
         ctx.stroke();
       }
     }
@@ -762,33 +781,35 @@ export class BattleScene implements GameScene {
     ctx.font = `14px ${FONT}`;
     if (this.phase === "player_turn") {
       ctx.fillStyle = hex(C.GREEN);
-      ctx.fillText("▶ TAP TO FIRE", M_GX + M_GRID_PX / 2, M_GY + M_GRID_PX + 36);
+      ctx.fillText("▶ TAP TO FIRE", mgx + M_GRID_PX / 2, mgy + M_GRID_PX + 36);
     } else {
       ctx.fillStyle = hex(C.DIM_GREEN);
-      ctx.fillText("⏳ OPPONENT'S TURN", M_GX + M_GRID_PX / 2, M_GY + M_GRID_PX + 36);
+      ctx.fillText("⏳ OPPONENT'S TURN", mgx + M_GRID_PX / 2, mgy + M_GRID_PX + 36);
     }
   }
 
   private renderMobilePlayerGrid(ctx: CanvasRenderingContext2D): void {
+    const mgx = this.mGX;
+    const mgy = this.mGY;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
     // Grid border
     ctx.strokeStyle = hex(C.DIM_GREEN);
     ctx.lineWidth = 2;
-    ctx.strokeRect(M_GX - 1, M_GY - 1, M_GRID_PX + 2, M_GRID_PX + 2);
+    ctx.strokeRect(mgx - 1, mgy - 1, M_GRID_PX + 2, M_GRID_PX + 2);
 
     // Grid lines
     ctx.strokeStyle = "rgba(26,138,26,0.3)";
     ctx.lineWidth = 1;
     for (let i = 0; i <= GRID_SIZE; i++) {
       ctx.beginPath();
-      ctx.moveTo(M_GX, M_GY + i * M_CELL);
-      ctx.lineTo(M_GX + M_GRID_PX, M_GY + i * M_CELL);
+      ctx.moveTo(mgx, mgy + i * M_CELL);
+      ctx.lineTo(mgx + M_GRID_PX, mgy + i * M_CELL);
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(M_GX + i * M_CELL, M_GY);
-      ctx.lineTo(M_GX + i * M_CELL, M_GY + M_GRID_PX);
+      ctx.moveTo(mgx + i * M_CELL, mgy);
+      ctx.lineTo(mgx + i * M_CELL, mgy + M_GRID_PX);
       ctx.stroke();
     }
 
@@ -796,10 +817,10 @@ export class BattleScene implements GameScene {
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
     for (let r = 0; r < GRID_SIZE; r++) {
-      ctx.fillText(ROW_LABELS[r], M_GX - 20, M_GY + r * M_CELL + M_CELL / 2);
+      ctx.fillText(ROW_LABELS[r], mgx - 20, mgy + r * M_CELL + M_CELL / 2);
     }
     for (let c = 0; c < GRID_SIZE; c++) {
-      ctx.fillText(COL_LABELS[c], M_GX + c * M_CELL + M_CELL / 2, M_GY + M_GRID_PX + 16);
+      ctx.fillText(COL_LABELS[c], mgx + c * M_CELL + M_CELL / 2, mgy + M_GRID_PX + 16);
     }
 
     // Player's ships
@@ -809,7 +830,7 @@ export class BattleScene implements GameScene {
         const st = this.playerBoard.grid[cell.row][cell.col];
         if (st === "hit") continue;
         ctx.fillStyle = sunk ? "rgba(102,17,17,0.6)" : "rgba(51,255,51,0.35)";
-        ctx.fillRect(M_GX + cell.col * M_CELL + 2, M_GY + cell.row * M_CELL + 2, M_CELL - 4, M_CELL - 4);
+        ctx.fillRect(mgx + cell.col * M_CELL + 2, mgy + cell.row * M_CELL + 2, M_CELL - 4, M_CELL - 4);
       }
     }
 
@@ -819,14 +840,14 @@ export class BattleScene implements GameScene {
         const st = this.playerBoard.grid[r][c];
         if (st === "hit") {
           ctx.fillStyle = "rgba(255,42,42,0.9)";
-          ctx.fillRect(M_GX + c * M_CELL + 3, M_GY + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
+          ctx.fillRect(mgx + c * M_CELL + 3, mgy + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
           ctx.strokeStyle = "#ff6600";
           ctx.lineWidth = 2;
-          ctx.strokeRect(M_GX + c * M_CELL + 3, M_GY + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
+          ctx.strokeRect(mgx + c * M_CELL + 3, mgy + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
         } else if (st === "miss") {
           ctx.fillStyle = "rgba(200,200,200,0.7)";
           ctx.beginPath();
-          ctx.arc(M_GX + c * M_CELL + M_CELL / 2, M_GY + r * M_CELL + M_CELL / 2, 8, 0, Math.PI * 2);
+          ctx.arc(mgx + c * M_CELL + M_CELL / 2, mgy + r * M_CELL + M_CELL / 2, 8, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -834,7 +855,9 @@ export class BattleScene implements GameScene {
   }
 
   private renderMobileFleet(ctx: CanvasRenderingContext2D): void {
-    const y = M_GY + M_GRID_PX + 56;
+    const W = this.engine.width;
+    const mgy = this.mGY;
+    const y = mgy + M_GRID_PX + 56;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
@@ -845,10 +868,10 @@ export class BattleScene implements GameScene {
 
     ctx.font = `12px ${FONT}`;
     ctx.fillStyle = hex(color);
-    ctx.fillText(label, CANVAS_W / 2, y);
+    ctx.fillText(label, W / 2, y);
 
     const totalW = this.fleet.length * 140;
-    let fx = (CANVAS_W - totalW) / 2;
+    let fx = (W - totalW) / 2;
     this.fleet.forEach((cfg) => {
       const ship = board.ships.find((s) => s.config.id === cfg.id);
       const sunk = ship ? isShipSunk(ship) : false;
@@ -869,7 +892,7 @@ export class BattleScene implements GameScene {
       ctx.fillStyle = last.color;
       ctx.font = `12px ${FONT}`;
       ctx.textAlign = "center";
-      ctx.fillText(last.text, CANVAS_W / 2, y + 40);
+      ctx.fillText(last.text, W / 2, y + 40);
     }
   }
 
@@ -883,8 +906,8 @@ export class BattleScene implements GameScene {
   }
 
   private mobileCell(x: number, y: number): { row: number; col: number } | null {
-    const col = Math.floor((x - M_GX) / M_CELL);
-    const row = Math.floor((y - M_GY) / M_CELL);
+    const col = Math.floor((x - this.mGX) / M_CELL);
+    const row = Math.floor((y - this.mGY) / M_CELL);
     if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
     return { row, col };
   }

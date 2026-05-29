@@ -1,4 +1,4 @@
-import { CANVAS_W, CANVAS_H } from "./config";
+import { CANVAS_W, CANVAS_H, CANVAS_W_P, CANVAS_H_P } from "./config";
 import { GameMode, Difficulty } from "./types";
 import { Board } from "./Board";
 import { AudioManager } from "./AudioManager";
@@ -65,8 +65,9 @@ export class Engine {
     this.canvas.addEventListener("touchmove", this.onTM, { passive: false });
     this.canvas.addEventListener("touchend", this.onTE, { passive: false });
 
-    // Portrait mode detection
-    this.checkPortrait();
+    // Portrait mode detection + canvas sizing
+    this.portrait = window.innerWidth < window.innerHeight || window.innerWidth < 700;
+    this.resizeCanvas();
     window.addEventListener("resize", this.onResize);
   }
 
@@ -108,7 +109,23 @@ export class Engine {
   }
 
   private checkPortrait(): void {
+    const wasPortrait = this.portrait;
     this.portrait = window.innerWidth < window.innerHeight || window.innerWidth < 700;
+    if (this.portrait !== wasPortrait) {
+      this.resizeCanvas();
+    }
+  }
+
+  private resizeCanvas(): void {
+    if (this.portrait) {
+      this.width = CANVAS_W_P;
+      this.height = CANVAS_H_P;
+    } else {
+      this.width = CANVAS_W;
+      this.height = CANVAS_H;
+    }
+    this.canvas.width = this.width;
+    this.canvas.height = this.height;
   }
 
   private coords(e: MouseEvent): { x: number; y: number } {

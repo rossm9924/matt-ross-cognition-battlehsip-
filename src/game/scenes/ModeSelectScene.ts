@@ -16,8 +16,8 @@ export class ModeSelectScene implements GameScene {
   update(): void {}
 
   render(ctx: CanvasRenderingContext2D): void {
-    const W = CANVAS_W;
-    const H = CANVAS_H;
+    const W = this.engine.width;
+    const H = this.engine.height;
     const cx = W / 2;
 
     ctx.fillStyle = "#000";
@@ -47,14 +47,15 @@ export class ModeSelectScene implements GameScene {
     ctx.fillText("Select your battle configuration", cx, 115);
 
     if (this.engine.portrait) {
-      // Portrait: tiles stacked vertically, narrower
-      this.drawTile(ctx, cx, 130, "CLASSIC",
+      // Portrait: tiles stacked vertically, centered in tall canvas
+      const oY = (H - 700) / 2; // center 700px of content vertically
+      this.drawTile(ctx, cx, oY + 50, "CLASSIC",
         "5 ships: Carrier, Battleship,\nCruiser, Submarine, Destroyer",
         [5, 4, 3, 3, 2], true);
-      this.drawTile(ctx, cx, 360, "ADVANCED",
+      this.drawTile(ctx, cx, oY + 280, "ADVANCED",
         "7 ships: adds Frigate\nand Patrol Boat",
         [5, 4, 3, 3, 3, 2, 2], true);
-      this.drawDifficultySelector(ctx, cx, 600);
+      this.drawDifficultySelector(ctx, cx, oY + 520);
     } else {
       // Landscape: tiles side by side
       this.drawTile(ctx, cx - 180, 150, "CLASSIC",
@@ -83,35 +84,38 @@ export class ModeSelectScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
+    const W = this.engine.width;
+    const H = this.engine.height;
+    const cx = W / 2;
+
     // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
+    if (x > W - 70 && y < 50) {
       this.engine.audio.toggleMute();
       return;
     }
     // Quit
-    if (x >= CANVAS_W / 2 - 40 && x <= CANVAS_W / 2 + 40 && y < 36) {
+    if (x >= cx - 40 && x <= cx + 40 && y < 36) {
       this.engine.switchScene(SCENES.TITLE);
       return;
     }
 
-    const cx = CANVAS_W / 2;
-
     if (this.engine.portrait) {
-      // Portrait: stacked tiles
+      // Portrait: stacked tiles with vertical offset
+      const oY = (H - 700) / 2;
       const tileW = 500;
-      if (this.inRect(x, y, cx - tileW / 2, 130, tileW, 200)) {
+      if (this.inRect(x, y, cx - tileW / 2, oY + 50, tileW, 200)) {
         this.selectMode("classic");
       }
-      if (this.inRect(x, y, cx - tileW / 2, 360, tileW, 200)) {
+      if (this.inRect(x, y, cx - tileW / 2, oY + 280, tileW, 200)) {
         this.selectMode("advanced");
       }
-      // Difficulty buttons at y=600
+      // Difficulty buttons
       const difficulties: Difficulty[] = ["easy", "normal", "hard"];
       const btnW = 120;
       const totalW = difficulties.length * btnW + (difficulties.length - 1) * 16;
       let bx = cx - totalW / 2;
       for (const diff of difficulties) {
-        if (this.inRect(x, y, bx, 630, btnW, 36)) {
+        if (this.inRect(x, y, bx, oY + 550, btnW, 36)) {
           this.selectedDifficulty = diff;
           this.engine.difficulty = diff;
         }

@@ -14,8 +14,7 @@ const GY = 100;
 // Mobile portrait layout: larger grid, fleet below
 const M_CELL = 50;
 const M_GRID_PX = GRID_SIZE * M_CELL; // 500px
-const M_GX = (CANVAS_W - M_GRID_PX) / 2; // 390 centered
-const M_GY = 70;
+// M_GX and M_GY computed dynamically from engine dimensions
 
 export class PlacementScene implements GameScene {
   private engine!: Engine;
@@ -44,9 +43,18 @@ export class PlacementScene implements GameScene {
 
   update(): void {}
 
+  private get mGX(): number {
+    return (this.engine.width - M_GRID_PX) / 2;
+  }
+
+  private get mGY(): number {
+    // Center content vertically: grid(500) + controls(~300) = 800. Offset from top.
+    return (this.engine.height - 900) / 2 + 60;
+  }
+
   render(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillRect(0, 0, this.engine.width, this.engine.height);
 
     this.renderTopBar(ctx);
 
@@ -82,13 +90,14 @@ export class PlacementScene implements GameScene {
   }
 
   private renderMobile(ctx: CanvasRenderingContext2D): void {
+    const W = this.engine.width;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Status message at top
+    // Status message above grid
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(this.msg, CANVAS_W / 2, 52);
+    ctx.fillText(this.msg, W / 2, this.mGY - 20);
 
     // Large grid
     this.drawMobileGrid(ctx);
@@ -113,12 +122,12 @@ export class PlacementScene implements GameScene {
     // Top bar interactions
     if (y < 36) {
       // Mute
-      if (x > CANVAS_W - 60) {
+      if (x > this.engine.width - 60) {
         this.engine.audio.toggleMute();
         return;
       }
       // Quit
-      if (x >= CANVAS_W / 2 - 40 && x <= CANVAS_W / 2 + 40) {
+      if (x >= this.engine.width / 2 - 40 && x <= this.engine.width / 2 + 40) {
         this.engine.switchScene(SCENES.TITLE);
         return;
       }
@@ -278,8 +287,9 @@ export class PlacementScene implements GameScene {
   }
 
   private renderTopBar(ctx: CanvasRenderingContext2D): void {
+    const W = this.engine.width;
     ctx.fillStyle = "rgba(17,17,17,0.9)";
-    ctx.fillRect(0, 0, CANVAS_W, 36);
+    ctx.fillRect(0, 0, W, 36);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -292,19 +302,19 @@ export class PlacementScene implements GameScene {
     // Quit
     ctx.font = `10px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText("QUIT", CANVAS_W / 2, 18);
+    ctx.fillText("QUIT", W / 2, 18);
 
     // Mute
     ctx.font = "16px sans-serif";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 30, 18);
+    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", W - 30, 18);
 
     // Mute label on hover
-    if (this.mx > CANVAS_W - 60 && this.my < 36) {
+    if (this.mx > W - 60 && this.my < 36) {
       ctx.fillStyle = "rgba(0,0,0,0.85)";
-      ctx.fillRect(CANVAS_W - 90, 38, 60, 20);
+      ctx.fillRect(W - 90, 38, 60, 20);
       ctx.fillStyle = hex(C.GREEN);
       ctx.font = `10px ${FONT}`;
-      ctx.fillText("SOUND", CANVAS_W - 60, 48);
+      ctx.fillText("SOUND", W - 60, 48);
     }
   }
 
@@ -565,18 +575,18 @@ export class PlacementScene implements GameScene {
   /* ============ MOBILE ============ */
 
   private mobileCellAt(x: number, y: number): { row: number; col: number } | null {
-    const col = Math.floor((x - M_GX) / M_CELL);
-    const row = Math.floor((y - M_GY) / M_CELL);
+    const col = Math.floor((x - this.mGX) / M_CELL);
+    const row = Math.floor((y - this.mGY) / M_CELL);
     if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
     return { row, col };
   }
 
   private onMobileClick(x: number, y: number): void {
-    const controlsY = M_GY + M_GRID_PX + 24;
+    const controlsY = this.mGY + M_GRID_PX + 24;
     const btnW = 180;
     const btnH = 44;
     const gap = 16;
-    const cx = CANVAS_W / 2;
+    const cx = this.engine.width / 2;
 
     // Row 1: SHUFFLE and TRASH
     const row1Y = controlsY + 24;
@@ -606,7 +616,7 @@ export class PlacementScene implements GameScene {
     // Fleet ships in a horizontal row below buttons
     const fleetY = row3Y + 60;
     const totalFleetW = this.fleet.length * 130;
-    let fx = (CANVAS_W - totalFleetW) / 2;
+    let fx = (this.engine.width - totalFleetW) / 2;
     for (const cfg of this.fleet) {
       if (this.inRect(x, y, fx, fleetY, 120, 30)) {
         this.selectShipById(cfg);
@@ -623,18 +633,20 @@ export class PlacementScene implements GameScene {
   }
 
   private drawMobileGrid(ctx: CanvasRenderingContext2D): void {
+    const mgx = this.mGX;
+    const mgy = this.mGY;
     ctx.strokeStyle = "rgba(26,138,26,0.5)";
     ctx.lineWidth = 1;
     for (let r = 0; r <= GRID_SIZE; r++) {
       ctx.beginPath();
-      ctx.moveTo(M_GX, M_GY + r * M_CELL);
-      ctx.lineTo(M_GX + M_GRID_PX, M_GY + r * M_CELL);
+      ctx.moveTo(mgx, mgy + r * M_CELL);
+      ctx.lineTo(mgx + M_GRID_PX, mgy + r * M_CELL);
       ctx.stroke();
     }
     for (let c = 0; c <= GRID_SIZE; c++) {
       ctx.beginPath();
-      ctx.moveTo(M_GX + c * M_CELL, M_GY);
-      ctx.lineTo(M_GX + c * M_CELL, M_GY + M_GRID_PX);
+      ctx.moveTo(mgx + c * M_CELL, mgy);
+      ctx.lineTo(mgx + c * M_CELL, mgy + M_GRID_PX);
       ctx.stroke();
     }
 
@@ -643,19 +655,21 @@ export class PlacementScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     for (let r = 0; r < GRID_SIZE; r++) {
-      ctx.fillText(ROW_LABELS[r], M_GX - 20, M_GY + r * M_CELL + M_CELL / 2);
+      ctx.fillText(ROW_LABELS[r], mgx - 20, mgy + r * M_CELL + M_CELL / 2);
     }
     for (let c = 0; c < GRID_SIZE; c++) {
-      ctx.fillText(COL_LABELS[c], M_GX + c * M_CELL + M_CELL / 2, M_GY + M_GRID_PX + 16);
+      ctx.fillText(COL_LABELS[c], mgx + c * M_CELL + M_CELL / 2, mgy + M_GRID_PX + 16);
     }
   }
 
   private drawMobilePlacedShips(ctx: CanvasRenderingContext2D): void {
+    const mgx = this.mGX;
+    const mgy = this.mGY;
     ctx.fillStyle = "rgba(51,255,51,0.65)";
     for (const ship of this.board.ships) {
       for (const cell of ship.cells) {
         ctx.beginPath();
-        ctx.roundRect(M_GX + cell.col * M_CELL + 3, M_GY + cell.row * M_CELL + 3, M_CELL - 6, M_CELL - 6, 4);
+        ctx.roundRect(mgx + cell.col * M_CELL + 3, mgy + cell.row * M_CELL + 3, M_CELL - 6, M_CELL - 6, 4);
         ctx.fill();
       }
     }
@@ -665,23 +679,25 @@ export class PlacementScene implements GameScene {
     if (!this.selected) return;
     const cell = this.mobileCellAt(this.mx, this.my);
     if (!cell) return;
+    const mgx = this.mGX;
+    const mgy = this.mGY;
     const canPlace = this.board.canPlace(this.selected, cell.row, cell.col, this.orientation);
     ctx.fillStyle = canPlace ? "rgba(51,255,51,0.3)" : "rgba(255,42,42,0.3)";
     for (let i = 0; i < this.selected.length; i++) {
       const cr = this.orientation === "vertical" ? cell.row + i : cell.row;
       const cc = this.orientation === "horizontal" ? cell.col + i : cell.col;
       if (cr >= 0 && cr < GRID_SIZE && cc >= 0 && cc < GRID_SIZE) {
-        ctx.fillRect(M_GX + cc * M_CELL + 1, M_GY + cr * M_CELL + 1, M_CELL - 2, M_CELL - 2);
+        ctx.fillRect(mgx + cc * M_CELL + 1, mgy + cr * M_CELL + 1, M_CELL - 2, M_CELL - 2);
       }
     }
   }
 
   private drawMobileControls(ctx: CanvasRenderingContext2D): void {
-    const controlsY = M_GY + M_GRID_PX + 24;
+    const controlsY = this.mGY + M_GRID_PX + 24;
     const btnW = 180;
     const btnH = 44;
     const gap = 16;
-    const cx = CANVAS_W / 2;
+    const cx = this.engine.width / 2;
 
     // Row 1: SHUFFLE and TRASH
     const row1Y = controlsY + 24;
@@ -717,7 +733,7 @@ export class PlacementScene implements GameScene {
     // Fleet indicators in a horizontal row
     const fleetY = row3Y + 60;
     const totalFleetW = this.fleet.length * 130;
-    let fx = (CANVAS_W - totalFleetW) / 2;
+    let fx = (this.engine.width - totalFleetW) / 2;
     ctx.textAlign = "center";
     this.fleet.forEach((cfg) => {
       const isRemaining = this.remaining.some((r) => r.id === cfg.id);

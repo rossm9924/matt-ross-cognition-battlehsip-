@@ -13,8 +13,8 @@ export class GameOverScene implements GameScene {
   update(): void {}
 
   render(ctx: CanvasRenderingContext2D): void {
-    const W = CANVAS_W;
-    const H = CANVAS_H;
+    const W = this.engine.width;
+    const H = this.engine.height;
     const cx = W / 2;
     const cy = H / 2;
     const won = this.engine.playerWon;
@@ -126,11 +126,11 @@ export class GameOverScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
-    const cx = CANVAS_W / 2;
-    const cy = CANVAS_H / 2;
+    const cx = this.engine.width / 2;
+    const cy = this.engine.height / 2;
 
     // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
+    if (x > this.engine.width - 70 && y < 50) {
       this.engine.audio.toggleMute();
       return;
     }

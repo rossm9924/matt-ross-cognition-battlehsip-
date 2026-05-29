@@ -2,6 +2,10 @@ export const GRID_SIZE = 10;
 export const CANVAS_W = 1280;
 export const CANVAS_H = 800;
 
+// Portrait (mobile) canvas size — fills most of the phone screen
+export const CANVAS_W_P = 800;
+export const CANVAS_H_P = 1400;
+
 export const ROW_LABELS = "ABCDEFGHIJ".split("");
 export const COL_LABELS = Array.from({ length: 10 }, (_, i) => String(i + 1));
 

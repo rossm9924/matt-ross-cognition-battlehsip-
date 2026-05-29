@@ -15,8 +15,8 @@ export class TitleScene implements GameScene {
   update(): void {}
 
   render(ctx: CanvasRenderingContext2D): void {
-    const W = CANVAS_W;
-    const H = CANVAS_H;
+    const W = this.engine.width;
+    const H = this.engine.height;
     const cx = W / 2;
     const cy = H / 2;
 
@@ -125,13 +125,13 @@ export class TitleScene implements GameScene {
       return;
     }
     // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
+    if (x > this.engine.width - 70 && y < 50) {
       this.engine.audio.toggleMute();
       return;
     }
     // Play button
-    const cx = CANVAS_W / 2;
-    const cy = CANVAS_H / 2;
+    const cx = this.engine.width / 2;
+    const cy = this.engine.height / 2;
     const bx = cx - 120, by = cy + 40, bw = 240, bh = 60;
     if (x >= bx && x <= bx + bw && y >= by && y <= by + bh) {
       this.engine.audio.sonarPing();
