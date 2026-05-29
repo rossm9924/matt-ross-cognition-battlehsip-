@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { createGame } from "@/game/setup";
 import { Engine } from "@/game/Engine";
 
-const MIN_WIDTH = 480;
-const MIN_HEIGHT = 360;
+const MIN_WIDTH = 320;
+const MIN_HEIGHT = 320;
 
 export default function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,8 +57,8 @@ export default function GameCanvas() {
             VIEWPORT TOO SMALL
           </div>
           <div style={{ fontSize: "13px", color: "#1A8A1A", maxWidth: "280px" }}>
-            Please widen your browser window or rotate your device to landscape
-            to play Battleship War.
+            Screen too small to play Battleship War.
+            Try rotating your device or using a larger screen.
           </div>
           <div style={{ fontSize: "11px", color: "#115511", marginTop: "12px" }}>
             Minimum: {MIN_WIDTH}×{MIN_HEIGHT}px

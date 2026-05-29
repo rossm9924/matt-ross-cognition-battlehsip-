@@ -11,6 +11,7 @@ export interface GameScene {
   onMouseMove?(x: number, y: number): void;
   onMouseDown?(x: number, y: number, button: number): void;
   onKeyDown?(key: string): void;
+  onResize?(): void;
 }
 
 export class Engine {
@@ -19,6 +20,7 @@ export class Engine {
   width = CANVAS_W;
   height = CANVAS_H;
   audio = new AudioManager();
+  portrait = false;
 
   gameMode: GameMode = "classic";
   difficulty: Difficulty = "normal";
@@ -57,6 +59,15 @@ export class Engine {
     this.canvas.addEventListener("mousedown", this.onMD);
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     document.addEventListener("keydown", this.onKD);
+
+    // Touch support for mobile
+    this.canvas.addEventListener("touchstart", this.onTS, { passive: false });
+    this.canvas.addEventListener("touchmove", this.onTM, { passive: false });
+    this.canvas.addEventListener("touchend", this.onTE, { passive: false });
+
+    // Portrait mode detection
+    this.checkPortrait();
+    window.addEventListener("resize", this.onResize);
   }
 
   register(name: string, scene: GameScene): void {
@@ -88,8 +99,16 @@ export class Engine {
     cancelAnimationFrame(this.animId);
     this.canvas.removeEventListener("mousemove", this.onMM);
     this.canvas.removeEventListener("mousedown", this.onMD);
+    this.canvas.removeEventListener("touchstart", this.onTS);
+    this.canvas.removeEventListener("touchmove", this.onTM);
+    this.canvas.removeEventListener("touchend", this.onTE);
     document.removeEventListener("keydown", this.onKD);
+    window.removeEventListener("resize", this.onResize);
     this.canvas.remove();
+  }
+
+  private checkPortrait(): void {
+    this.portrait = window.innerWidth < window.innerHeight || window.innerWidth < 700;
   }
 
   private coords(e: MouseEvent): { x: number; y: number } {
@@ -126,6 +145,57 @@ export class Engine {
 
   private onKD = (e: KeyboardEvent) => {
     this.current?.onKeyDown?.(e.key);
+  };
+
+  private touchCoords(t: Touch): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const aspect = this.width / this.height;
+    const rAspect = rect.width / rect.height;
+    let rw: number, rh: number, ox: number, oy: number;
+    if (rAspect > aspect) {
+      rh = rect.height;
+      rw = rh * aspect;
+      ox = (rect.width - rw) / 2;
+      oy = 0;
+    } else {
+      rw = rect.width;
+      rh = rw / aspect;
+      ox = 0;
+      oy = (rect.height - rh) / 2;
+    }
+    return {
+      x: ((t.clientX - rect.left - ox) / rw) * this.width,
+      y: ((t.clientY - rect.top - oy) / rh) * this.height,
+    };
+  }
+
+  private onTS = (e: TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length > 0) {
+      const { x, y } = this.touchCoords(e.touches[0]);
+      this.current?.onMouseMove?.(x, y);
+      this.current?.onMouseDown?.(x, y, 0);
+    }
+  };
+
+  private onTM = (e: TouchEvent) => {
+    e.preventDefault();
+    if (e.touches.length > 0) {
+      const { x, y } = this.touchCoords(e.touches[0]);
+      this.current?.onMouseMove?.(x, y);
+    }
+  };
+
+  private onTE = (e: TouchEvent) => {
+    e.preventDefault();
+  };
+
+  private onResize = () => {
+    const was = this.portrait;
+    this.checkPortrait();
+    if (was !== this.portrait) {
+      this.current?.onResize?.();
+    }
   };
 
   private loop = (time: number) => {

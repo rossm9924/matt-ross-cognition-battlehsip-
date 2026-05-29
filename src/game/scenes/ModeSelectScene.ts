@@ -46,16 +46,25 @@ export class ModeSelectScene implements GameScene {
     ctx.fillStyle = hex(C.DIM_GREEN);
     ctx.fillText("Select your battle configuration", cx, 115);
 
-    // Mode tiles
-    this.drawTile(ctx, cx - 180, 150, "CLASSIC",
-      "Standard 10×10 grid\n5 ships: Carrier, Battleship,\nCruiser, Submarine, Destroyer",
-      [5, 4, 3, 3, 2]);
-    this.drawTile(ctx, cx + 180, 150, "ADVANCED",
-      "Standard 10×10 grid\n7 ships: adds Frigate\nand Patrol Boat",
-      [5, 4, 3, 3, 3, 2, 2]);
-
-    // Difficulty selector
-    this.drawDifficultySelector(ctx, cx, 530);
+    if (this.engine.portrait) {
+      // Portrait: tiles stacked vertically, narrower
+      this.drawTile(ctx, cx, 130, "CLASSIC",
+        "5 ships: Carrier, Battleship,\nCruiser, Submarine, Destroyer",
+        [5, 4, 3, 3, 2], true);
+      this.drawTile(ctx, cx, 360, "ADVANCED",
+        "7 ships: adds Frigate\nand Patrol Boat",
+        [5, 4, 3, 3, 3, 2, 2], true);
+      this.drawDifficultySelector(ctx, cx, 600);
+    } else {
+      // Landscape: tiles side by side
+      this.drawTile(ctx, cx - 180, 150, "CLASSIC",
+        "Standard 10×10 grid\n5 ships: Carrier, Battleship,\nCruiser, Submarine, Destroyer",
+        [5, 4, 3, 3, 2]);
+      this.drawTile(ctx, cx + 180, 150, "ADVANCED",
+        "Standard 10×10 grid\n7 ships: adds Frigate\nand Patrol Boat",
+        [5, 4, 3, 3, 3, 2, 2]);
+      this.drawDifficultySelector(ctx, cx, 530);
+    }
 
     // Mute label on hover
     if (this.mx > W - 60 && this.my < 36) {
@@ -87,26 +96,46 @@ export class ModeSelectScene implements GameScene {
 
     const cx = CANVAS_W / 2;
 
-    // Classic tile
-    if (this.inRect(x, y, cx - 180 - 130, 150, 260, 340)) {
-      this.selectMode("classic");
-    }
-    // Advanced tile
-    if (this.inRect(x, y, cx + 180 - 130, 150, 260, 340)) {
-      this.selectMode("advanced");
-    }
-
-    // Difficulty buttons
-    const difficulties: Difficulty[] = ["easy", "normal", "hard"];
-    const btnW = 120;
-    const totalW = difficulties.length * btnW + (difficulties.length - 1) * 16;
-    let bx = cx - totalW / 2;
-    for (const diff of difficulties) {
-      if (this.inRect(x, y, bx, 560, btnW, 36)) {
-        this.selectedDifficulty = diff;
-        this.engine.difficulty = diff;
+    if (this.engine.portrait) {
+      // Portrait: stacked tiles
+      const tileW = 500;
+      if (this.inRect(x, y, cx - tileW / 2, 130, tileW, 200)) {
+        this.selectMode("classic");
       }
-      bx += btnW + 16;
+      if (this.inRect(x, y, cx - tileW / 2, 360, tileW, 200)) {
+        this.selectMode("advanced");
+      }
+      // Difficulty buttons at y=600
+      const difficulties: Difficulty[] = ["easy", "normal", "hard"];
+      const btnW = 120;
+      const totalW = difficulties.length * btnW + (difficulties.length - 1) * 16;
+      let bx = cx - totalW / 2;
+      for (const diff of difficulties) {
+        if (this.inRect(x, y, bx, 630, btnW, 36)) {
+          this.selectedDifficulty = diff;
+          this.engine.difficulty = diff;
+        }
+        bx += btnW + 16;
+      }
+    } else {
+      // Landscape: side-by-side tiles
+      if (this.inRect(x, y, cx - 180 - 130, 150, 260, 340)) {
+        this.selectMode("classic");
+      }
+      if (this.inRect(x, y, cx + 180 - 130, 150, 260, 340)) {
+        this.selectMode("advanced");
+      }
+      const difficulties: Difficulty[] = ["easy", "normal", "hard"];
+      const btnW = 120;
+      const totalW = difficulties.length * btnW + (difficulties.length - 1) * 16;
+      let bx = cx - totalW / 2;
+      for (const diff of difficulties) {
+        if (this.inRect(x, y, bx, 560, btnW, 36)) {
+          this.selectedDifficulty = diff;
+          this.engine.difficulty = diff;
+        }
+        bx += btnW + 16;
+      }
     }
   }
 
@@ -162,9 +191,10 @@ export class ModeSelectScene implements GameScene {
 
   private drawTile(
     ctx: CanvasRenderingContext2D, x: number, y: number,
-    title: string, desc: string, ships: number[],
+    title: string, desc: string, ships: number[], compact = false,
   ): void {
-    const w = 260, h = 340;
+    const w = compact ? 500 : 260;
+    const h = compact ? 200 : 340;
     const hover = this.inRect(this.mx, this.my, x - w / 2, y, w, h);
 
     ctx.fillStyle = hover ? hex(C.DIM_GREEN) : hex(C.DARK_GREEN);
@@ -177,34 +207,54 @@ export class ModeSelectScene implements GameScene {
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `24px ${FONT}`;
+    ctx.font = `${compact ? 28 : 24}px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(title, x, y + 30);
+    ctx.fillText(title, x, y + (compact ? 30 : 30));
 
     // Ship silhouettes with labels
     const shipNames = title === "CLASSIC"
       ? ["Carrier", "Battleship", "Cruiser", "Submarine", "Destroyer"]
       : ["Carrier", "Battleship", "Cruiser", "Submarine", "Destroyer", "Frigate", "Patrol"];
-    ctx.fillStyle = "rgba(51,255,51,0.6)";
-    ships.forEach((len, i) => {
-      const sw = len * 20;
-      ctx.beginPath();
-      ctx.roundRect(x - sw / 2 - 30, y + 65 + i * 26, sw, 14, 3);
-      ctx.fill();
 
-      ctx.font = `9px ${FONT}`;
-      ctx.fillStyle = hex(C.DIM_GREEN);
-      ctx.textAlign = "left";
-      ctx.fillText(shipNames[i] || "", x - sw / 2 + sw - 20, y + 72 + i * 26);
-      ctx.textAlign = "center";
+    if (compact) {
+      // Horizontal layout for portrait tiles
+      const totalShips = ships.length;
+      const shipW = Math.min(60, (w - 40) / totalShips);
+      let sx = x - (totalShips * shipW) / 2;
       ctx.fillStyle = "rgba(51,255,51,0.6)";
-    });
+      ships.forEach((len, i) => {
+        const sw = len * 8;
+        ctx.beginPath();
+        ctx.roundRect(sx + (shipW - sw) / 2, y + 60, sw, 12, 3);
+        ctx.fill();
+        ctx.font = `9px ${FONT}`;
+        ctx.fillStyle = hex(C.DIM_GREEN);
+        ctx.fillText(shipNames[i] || "", sx + shipW / 2, y + 85);
+        ctx.fillStyle = "rgba(51,255,51,0.6)";
+        sx += shipW;
+      });
+    } else {
+      ctx.fillStyle = "rgba(51,255,51,0.6)";
+      ships.forEach((len, i) => {
+        const sw = len * 20;
+        ctx.beginPath();
+        ctx.roundRect(x - sw / 2 - 30, y + 65 + i * 26, sw, 14, 3);
+        ctx.fill();
+
+        ctx.font = `9px ${FONT}`;
+        ctx.fillStyle = hex(C.DIM_GREEN);
+        ctx.textAlign = "left";
+        ctx.fillText(shipNames[i] || "", x - sw / 2 + sw - 20, y + 72 + i * 26);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(51,255,51,0.6)";
+      });
+    }
 
     // Description
-    ctx.font = `11px ${FONT}`;
+    ctx.font = `${compact ? 12 : 11}px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
     desc.split("\n").forEach((line, i) => {
-      ctx.fillText(line, x, y + h - 60 + i * 16);
+      ctx.fillText(line, x, y + h - (compact ? 40 : 60) + i * 16);
     });
   }
 

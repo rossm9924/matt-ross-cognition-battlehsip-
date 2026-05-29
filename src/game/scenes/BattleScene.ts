@@ -10,7 +10,7 @@ import { Engine, GameScene } from "../Engine";
 
 type Phase = "player_turn" | "animating" | "enemy_turn" | "enemy_anim";
 
-// Dual-grid layout: player grid left, enemy grid right
+// Desktop dual-grid layout: player grid left, enemy grid right
 const CELL = 28;
 const GRID_PX = GRID_SIZE * CELL; // 280px for 10×10
 
@@ -18,6 +18,12 @@ const P_GX = 40;  // player grid X
 const P_GY = 80;  // player grid Y
 const E_GX = 460;  // enemy grid X
 const E_GY = 80;  // enemy grid Y
+
+// Mobile portrait layout: single large grid centered
+const M_CELL = 56;
+const M_GRID_PX = GRID_SIZE * M_CELL; // 560px
+const M_GX = (CANVAS_W - M_GRID_PX) / 2; // centered
+const M_GY = 100;
 
 interface LogEntry {
   text: string;
@@ -51,6 +57,9 @@ export class BattleScene implements GameScene {
   private cursorCol = 0;
   private cursorActive = false;
 
+  // Mobile: which grid to show (portrait mode)
+  private mobileView: "enemy" | "player" = "enemy";
+
   enter(engine: Engine): void {
     this.engine = engine;
     this.playerBoard = engine.playerBoard!;
@@ -66,7 +75,8 @@ export class BattleScene implements GameScene {
     this.cursorRow = 0;
     this.cursorCol = 0;
     this.cursorActive = false;
-    this.status = "YOUR TURN — Click enemy grid to fire";
+    this.mobileView = "enemy";
+    this.status = "YOUR TURN — Tap enemy grid to fire";
     engine.resetStats();
   }
 
@@ -87,12 +97,24 @@ export class BattleScene implements GameScene {
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
     this.renderTopBar(ctx);
-    this.renderPlayerGrid(ctx);
-    this.renderEnemyGrid(ctx);
-    this.renderFleetPanels(ctx);
-    this.renderBattleLog(ctx);
+
+    if (this.engine.portrait) {
+      this.renderMobileView(ctx);
+    } else {
+      this.renderPlayerGrid(ctx);
+      this.renderEnemyGrid(ctx);
+      this.renderFleetPanels(ctx);
+      this.renderBattleLog(ctx);
+    }
     this.renderHUD(ctx);
     this.renderSunkBanner(ctx);
+  }
+
+  onResize(): void {
+    // Switch to enemy grid when rotating to portrait
+    if (this.engine.portrait && this.mobileView === "player") {
+      this.mobileView = "enemy";
+    }
   }
 
   onMouseMove(x: number, y: number): void {
@@ -115,11 +137,33 @@ export class BattleScene implements GameScene {
     // Help icon
     if (x < 60 && y < 50) return;
 
+    // Mobile grid toggle tabs
+    if (this.engine.portrait) {
+      const tabY = 36;
+      const tabH = 30;
+      if (y >= tabY && y <= tabY + tabH) {
+        if (x < CANVAS_W / 2) {
+          this.mobileView = "enemy";
+        } else {
+          this.mobileView = "player";
+        }
+        return;
+      }
+    }
+
     if (this.phase !== "player_turn") return;
 
-    const cell = this.enemyCell(x, y);
-    if (!cell) return;
-    this.fireAt(cell.row, cell.col);
+    if (this.engine.portrait) {
+      if (this.mobileView === "enemy") {
+        const cell = this.mobileCell(x, y);
+        if (!cell) return;
+        this.fireAt(cell.row, cell.col);
+      }
+    } else {
+      const cell = this.enemyCell(x, y);
+      if (!cell) return;
+      this.fireAt(cell.row, cell.col);
+    }
   }
 
   onKeyDown(key: string): void {
@@ -480,6 +524,20 @@ export class BattleScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
+    if (this.engine.portrait) {
+      // Mobile HUD: status at bottom, score in corner
+      ctx.fillStyle = "rgba(17,17,17,0.9)";
+      ctx.fillRect(0, CANVAS_H - 50, CANVAS_W, 50);
+      ctx.font = `16px ${FONT}`;
+      ctx.fillStyle = this.phase === "player_turn" ? hex(C.GREEN) : hex(C.DIM_GREEN);
+      ctx.fillText(this.status, CANVAS_W / 2, CANVAS_H - 28);
+      ctx.font = `12px ${FONT}`;
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.fillText(`SCORE: ${this.score}`, CANVAS_W / 2, CANVAS_H - 10);
+      return;
+    }
+
+    // Desktop HUD
     // Status bar
     ctx.fillStyle = "rgba(17,17,17,0.8)";
     ctx.fillRect(P_GX, 36, GRID_PX * 2 + (E_GX - P_GX - GRID_PX) + GRID_PX, 26);
@@ -575,11 +633,258 @@ export class BattleScene implements GameScene {
     }, 600);
   }
 
+  /* ============ MOBILE RENDERING ============ */
+
+  private renderMobileView(ctx: CanvasRenderingContext2D): void {
+    // Tab bar for switching grids
+    const tabY = 36;
+    const tabH = 30;
+    const halfW = CANVAS_W / 2;
+
+    // Enemy tab
+    ctx.fillStyle = this.mobileView === "enemy" ? hex(C.DARK_GREEN) : "rgba(17,17,17,0.9)";
+    ctx.fillRect(0, tabY, halfW, tabH);
+    ctx.fillStyle = this.mobileView === "enemy" ? hex(C.GREEN) : hex(C.DIM_GREEN);
+    ctx.font = `14px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("⚔ ENEMY WATERS", halfW / 2, tabY + tabH / 2);
+
+    // Player tab
+    ctx.fillStyle = this.mobileView === "player" ? hex(C.DARK_GREEN) : "rgba(17,17,17,0.9)";
+    ctx.fillRect(halfW, tabY, halfW, tabH);
+    ctx.fillStyle = this.mobileView === "player" ? hex(C.GREEN) : hex(C.DIM_GREEN);
+    ctx.fillText("🛡 YOUR WATERS", halfW + halfW / 2, tabY + tabH / 2);
+
+    // Tab separator
+    ctx.strokeStyle = hex(C.GREEN);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(halfW, tabY);
+    ctx.lineTo(halfW, tabY + tabH);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, tabY + tabH);
+    ctx.lineTo(CANVAS_W, tabY + tabH);
+    ctx.stroke();
+
+    if (this.mobileView === "enemy") {
+      this.renderMobileEnemyGrid(ctx);
+    } else {
+      this.renderMobilePlayerGrid(ctx);
+    }
+
+    // Fleet summary at bottom
+    this.renderMobileFleet(ctx);
+  }
+
+  private renderMobileEnemyGrid(ctx: CanvasRenderingContext2D): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Grid border
+    ctx.strokeStyle = hex(C.GREEN);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(M_GX - 1, M_GY - 1, M_GRID_PX + 2, M_GRID_PX + 2);
+
+    // Grid lines
+    ctx.strokeStyle = "rgba(26,138,26,0.4)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+      ctx.beginPath();
+      ctx.moveTo(M_GX, M_GY + i * M_CELL);
+      ctx.lineTo(M_GX + M_GRID_PX, M_GY + i * M_CELL);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(M_GX + i * M_CELL, M_GY);
+      ctx.lineTo(M_GX + i * M_CELL, M_GY + M_GRID_PX);
+      ctx.stroke();
+    }
+
+    // Labels
+    ctx.font = `14px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    for (let r = 0; r < GRID_SIZE; r++) {
+      ctx.fillText(ROW_LABELS[r], M_GX - 20, M_GY + r * M_CELL + M_CELL / 2);
+    }
+    for (let c = 0; c < GRID_SIZE; c++) {
+      ctx.fillText(COL_LABELS[c], M_GX + c * M_CELL + M_CELL / 2, M_GY + M_GRID_PX + 16);
+    }
+
+    // Markers
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const st = this.enemyBoard.grid[r][c];
+        if (st === "hit") {
+          ctx.fillStyle = "rgba(255,42,42,1.0)";
+          ctx.fillRect(M_GX + c * M_CELL + 3, M_GY + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
+          ctx.strokeStyle = "#ff6600";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(M_GX + c * M_CELL + 3, M_GY + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
+        } else if (st === "miss") {
+          ctx.fillStyle = "rgba(200,200,200,0.7)";
+          ctx.beginPath();
+          ctx.arc(M_GX + c * M_CELL + M_CELL / 2, M_GY + r * M_CELL + M_CELL / 2, 8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Sunk ship outlines
+    for (const ship of this.enemyBoard.ships) {
+      if (isShipSunk(ship)) {
+        ctx.strokeStyle = hex(C.HIT_RED);
+        ctx.lineWidth = 3;
+        for (const cell of ship.cells) {
+          ctx.strokeRect(M_GX + cell.col * M_CELL + 2, M_GY + cell.row * M_CELL + 2, M_CELL - 4, M_CELL - 4);
+        }
+      }
+    }
+
+    // Crosshair on hover/touch
+    if (this.phase === "player_turn") {
+      const hoverCell = this.mobileCell(this.mx, this.my);
+      if (hoverCell) {
+        const cx = M_GX + hoverCell.col * M_CELL + M_CELL / 2;
+        const cy = M_GY + hoverCell.row * M_CELL + M_CELL / 2;
+        ctx.strokeStyle = "rgba(51,255,51,0.4)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(M_GX, cy);
+        ctx.lineTo(M_GX + M_GRID_PX, cy);
+        ctx.moveTo(cx, M_GY);
+        ctx.lineTo(cx, M_GY + M_GRID_PX);
+        ctx.stroke();
+      }
+    }
+
+    // Turn indicator below grid
+    ctx.font = `14px ${FONT}`;
+    if (this.phase === "player_turn") {
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.fillText("▶ TAP TO FIRE", M_GX + M_GRID_PX / 2, M_GY + M_GRID_PX + 36);
+    } else {
+      ctx.fillStyle = hex(C.DIM_GREEN);
+      ctx.fillText("⏳ OPPONENT'S TURN", M_GX + M_GRID_PX / 2, M_GY + M_GRID_PX + 36);
+    }
+  }
+
+  private renderMobilePlayerGrid(ctx: CanvasRenderingContext2D): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Grid border
+    ctx.strokeStyle = hex(C.DIM_GREEN);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(M_GX - 1, M_GY - 1, M_GRID_PX + 2, M_GRID_PX + 2);
+
+    // Grid lines
+    ctx.strokeStyle = "rgba(26,138,26,0.3)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+      ctx.beginPath();
+      ctx.moveTo(M_GX, M_GY + i * M_CELL);
+      ctx.lineTo(M_GX + M_GRID_PX, M_GY + i * M_CELL);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(M_GX + i * M_CELL, M_GY);
+      ctx.lineTo(M_GX + i * M_CELL, M_GY + M_GRID_PX);
+      ctx.stroke();
+    }
+
+    // Labels
+    ctx.font = `14px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    for (let r = 0; r < GRID_SIZE; r++) {
+      ctx.fillText(ROW_LABELS[r], M_GX - 20, M_GY + r * M_CELL + M_CELL / 2);
+    }
+    for (let c = 0; c < GRID_SIZE; c++) {
+      ctx.fillText(COL_LABELS[c], M_GX + c * M_CELL + M_CELL / 2, M_GY + M_GRID_PX + 16);
+    }
+
+    // Player's ships
+    for (const ship of this.playerBoard.ships) {
+      const sunk = isShipSunk(ship);
+      for (const cell of ship.cells) {
+        const st = this.playerBoard.grid[cell.row][cell.col];
+        if (st === "hit") continue;
+        ctx.fillStyle = sunk ? "rgba(102,17,17,0.6)" : "rgba(51,255,51,0.35)";
+        ctx.fillRect(M_GX + cell.col * M_CELL + 2, M_GY + cell.row * M_CELL + 2, M_CELL - 4, M_CELL - 4);
+      }
+    }
+
+    // Hit/miss markers from AI
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const st = this.playerBoard.grid[r][c];
+        if (st === "hit") {
+          ctx.fillStyle = "rgba(255,42,42,0.9)";
+          ctx.fillRect(M_GX + c * M_CELL + 3, M_GY + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
+          ctx.strokeStyle = "#ff6600";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(M_GX + c * M_CELL + 3, M_GY + r * M_CELL + 3, M_CELL - 6, M_CELL - 6);
+        } else if (st === "miss") {
+          ctx.fillStyle = "rgba(200,200,200,0.7)";
+          ctx.beginPath();
+          ctx.arc(M_GX + c * M_CELL + M_CELL / 2, M_GY + r * M_CELL + M_CELL / 2, 8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  private renderMobileFleet(ctx: CanvasRenderingContext2D): void {
+    const y = M_GY + M_GRID_PX + 56;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Compact fleet display in a row
+    const board = this.mobileView === "enemy" ? this.enemyBoard : this.playerBoard;
+    const label = this.mobileView === "enemy" ? "ENEMY FLEET" : "YOUR FLEET";
+    const color = this.mobileView === "enemy" ? C.HIT_RED : C.GREEN;
+
+    ctx.font = `12px ${FONT}`;
+    ctx.fillStyle = hex(color);
+    ctx.fillText(label, CANVAS_W / 2, y);
+
+    const totalW = this.fleet.length * 140;
+    let fx = (CANVAS_W - totalW) / 2;
+    this.fleet.forEach((cfg) => {
+      const ship = board.ships.find((s) => s.config.id === cfg.id);
+      const sunk = ship ? isShipSunk(ship) : false;
+      const hitCount = ship ? ship.hits.size : 0;
+      const dots = Array.from({ length: cfg.length }, (_, di) =>
+        di < hitCount ? "✕" : "●",
+      ).join("");
+      ctx.fillStyle = sunk ? hex(C.SUNK_OVERLAY) : hex(color);
+      ctx.font = `11px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.fillText(`${cfg.name} ${dots}`, fx + 70, y + 18);
+      fx += 140;
+    });
+
+    // Last log entry
+    if (this.log.length > 0) {
+      const last = this.log[this.log.length - 1];
+      ctx.fillStyle = last.color;
+      ctx.font = `12px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.fillText(last.text, CANVAS_W / 2, y + 40);
+    }
+  }
+
   /* ============ HELPERS ============ */
 
   private enemyCell(x: number, y: number): { row: number; col: number } | null {
     const col = Math.floor((x - E_GX) / CELL);
     const row = Math.floor((y - E_GY) / CELL);
+    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
+    return { row, col };
+  }
+
+  private mobileCell(x: number, y: number): { row: number; col: number } | null {
+    const col = Math.floor((x - M_GX) / M_CELL);
+    const row = Math.floor((y - M_GY) / M_CELL);
     if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
     return { row, col };
   }
