@@ -7,14 +7,16 @@ import { Board } from "../Board";
 import { Orientation } from "../types";
 import { Engine, GameScene } from "../Engine";
 
-const CELL = 38;
-const GRID_W = GRID_SIZE * CELL;          // 380
+const CELL = 44;
+const GRID_W = GRID_SIZE * CELL;          // 440
 const PALETTE_GAP = 40;
 const PALETTE_W = 260;
 const LABEL_W = 20;
-const TOTAL_BLOCK = LABEL_W + GRID_W + PALETTE_GAP + PALETTE_W; // 700
-const GX = Math.round((CANVAS_W - TOTAL_BLOCK) / 2) + LABEL_W;  // center block, then offset past labels
-const GY = 100;
+const TOTAL_BLOCK = LABEL_W + GRID_W + PALETTE_GAP + PALETTE_W;
+const GX = Math.round((CANVAS_W - TOTAL_BLOCK) / 2) + LABEL_W;
+
+const HEADER_Y = 80;
+const GY = HEADER_Y + 55; // grid starts below headings
 
 export class PlacementScene implements GameScene {
   private engine!: Engine;
@@ -52,17 +54,17 @@ export class PlacementScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Title — centered over the entire grid+palette block
-    const blockCenterX = GX + GRID_W / 2 + (PALETTE_GAP + PALETTE_W) / 2;
+    // Title — centered over the grid area only (avoids overlapping palette labels)
+    const gridCenterX = GX + GRID_W / 2;
     ctx.font = `30px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("STRATEGY PANEL", blockCenterX, 55);
+    ctx.fillText("STRATEGY PANEL", gridCenterX, HEADER_Y);
 
     ctx.font = `13px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()} | Difficulty: ${this.engine.difficulty.toUpperCase()}`, blockCenterX, 78);
+    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()} | Difficulty: ${this.engine.difficulty.toUpperCase()}`, gridCenterX, HEADER_Y + 22);
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(this.msg, blockCenterX, 94);
+    ctx.fillText(this.msg, gridCenterX, HEADER_Y + 40);
 
     // Grid
     this.drawGrid(ctx);

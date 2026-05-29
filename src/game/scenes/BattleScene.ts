@@ -10,21 +10,19 @@ import { Engine, GameScene } from "../Engine";
 
 type Phase = "player_turn" | "animating" | "enemy_turn" | "enemy_anim";
 
-// Dual-grid layout: player grid left, enemy grid right, centered on canvas
-const CELL = 28;
-const GRID_PX = GRID_SIZE * CELL; // 280px for 10×10
+// Dual-grid layout: center just the two grids on canvas, fleet panels float to the right
+const CELL = 36;
+const GRID_PX = GRID_SIZE * CELL; // 360px for 10×10
 
-const GRID_GAP = 100;        // gap between the two grids
-const FLEET_GAP = 24;        // gap before fleet panels
-const FLEET_W = 200;         // approx fleet panel width
+const GRID_GAP = 60;         // gap between the two grids
 const LABEL_MARGIN = 14;     // row label space left of each grid
-const TOTAL_W = LABEL_MARGIN + GRID_PX + GRID_GAP + LABEL_MARGIN + GRID_PX + FLEET_GAP + FLEET_W;
-const BLOCK_X = Math.round((CANVAS_W - TOTAL_W) / 2);
+const TWO_GRIDS_W = LABEL_MARGIN + GRID_PX + GRID_GAP + LABEL_MARGIN + GRID_PX;
+const BLOCK_X = Math.round((CANVAS_W - TWO_GRIDS_W) / 2);
 
 const P_GX = BLOCK_X + LABEL_MARGIN;                           // player grid X
-const P_GY = 100;                                               // player grid Y (push down for status bar)
+const P_GY = 130;                                               // player grid Y
 const E_GX = P_GX + GRID_PX + GRID_GAP + LABEL_MARGIN;        // enemy grid X
-const E_GY = 100;                                               // enemy grid Y
+const E_GY = 130;                                               // enemy grid Y
 
 interface LogEntry {
   text: string;
@@ -498,11 +496,12 @@ export class BattleScene implements GameScene {
     ctx.fillStyle = this.phase === "player_turn" ? hex(C.GREEN) : hex(C.DIM_GREEN);
     ctx.fillText(this.status, (P_GX + E_GX + GRID_PX) / 2, statusY + statusH / 2);
 
-    // Score
+    // Score — positioned below grids, near battle log
+    const bottomY = P_GY + GRID_PX + 50;
     ctx.textAlign = "right";
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(`SCORE: ${this.score}`, CANVAS_W - 30, CANVAS_H - 20);
+    ctx.fillText(`SCORE: ${this.score}`, CANVAS_W - 30, bottomY);
 
     // Turn indicator
     ctx.textAlign = "center";
@@ -519,7 +518,7 @@ export class BattleScene implements GameScene {
     ctx.textAlign = "left";
     ctx.font = `9px ${FONT}`;
     ctx.fillStyle = hex(C.DARK_GREEN);
-    ctx.fillText("Arrow keys + Enter to fire", E_GX, CANVAS_H - 14);
+    ctx.fillText("Arrow keys + Enter to fire", E_GX, bottomY + 16);
   }
 
   private renderSunkBanner(ctx: CanvasRenderingContext2D): void {
