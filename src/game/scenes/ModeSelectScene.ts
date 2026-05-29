@@ -1,14 +1,17 @@
 import { SCENES, FONT, CANVAS_W, CANVAS_H, hex, C } from "../config";
 import { Engine, GameScene } from "../Engine";
-import type { GameMode } from "../types";
+import { CostTracker } from "../CostTracker";
+import type { GameMode, AIMode } from "../types";
 
 export class ModeSelectScene implements GameScene {
   private engine!: Engine;
   private mx = 0;
   private my = 0;
+  private selectedGameMode: GameMode | null = null;
 
   enter(engine: Engine): void {
     this.engine = engine;
+    this.selectedGameMode = null;
   }
 
   update(): void {}
@@ -23,22 +26,19 @@ export class ModeSelectScene implements GameScene {
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `48px ${FONT}`;
-    ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("GAME MODE", cx, 80);
 
-    ctx.font = `16px ${FONT}`;
-    ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText("Select your battle configuration", cx, 130);
-
-    this.drawTile(ctx, cx - 180, 200, "CLASSIC", "5 Ships\nStandard Fleet", [5, 5, 4, 3, 3]);
-    this.drawTile(ctx, cx + 180, 200, "ADVANCED", "7 Ships\nExpanded Fleet", [5, 5, 4, 3, 3, 3, 2]);
+    if (!this.selectedGameMode) {
+      this.renderGameModeSelect(ctx, cx);
+    } else {
+      this.renderAIModeSelect(ctx, cx);
+    }
 
     // Mute icon
     ctx.fillStyle = "#222";
     ctx.fillRect(W - 56, 16, 32, 28);
     ctx.font = "20px sans-serif";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", W - 40, 30);
+    ctx.textAlign = "center";
+    ctx.fillText(this.engine.audio.muted ? "\uD83D\uDD07" : "\uD83D\uDD0A", W - 40, 30);
   }
 
   onMouseMove(x: number, y: number): void {
@@ -52,21 +52,153 @@ export class ModeSelectScene implements GameScene {
       this.engine.audio.toggleMute();
       return;
     }
+
     const cx = CANVAS_W / 2;
-    // Classic tile
-    if (this.inRect(x, y, cx - 180 - 140, 200, 280, 360)) {
-      this.selectMode("classic");
-    }
-    // Advanced tile
-    if (this.inRect(x, y, cx + 180 - 140, 200, 280, 360)) {
-      this.selectMode("advanced");
+
+    if (!this.selectedGameMode) {
+      // Classic tile
+      if (this.inRect(x, y, cx - 180 - 140, 200, 280, 360)) {
+        this.engine.audio.sonarPing();
+        this.selectedGameMode = "classic";
+      }
+      // Advanced tile
+      if (this.inRect(x, y, cx + 180 - 140, 200, 280, 360)) {
+        this.engine.audio.sonarPing();
+        this.selectedGameMode = "advanced";
+      }
+    } else {
+      // AI mode selection
+      if (this.inRect(x, y, cx - 180 - 140, 220, 280, 300)) {
+        this.selectAIMode("fast");
+      }
+      if (this.inRect(x, y, cx + 180 - 140, 220, 280, 300)) {
+        this.selectAIMode("llm");
+      }
+      // Back button
+      if (this.inRect(x, y, 30, CANVAS_H - 60, 100, 36)) {
+        this.engine.audio.sonarPing();
+        this.selectedGameMode = null;
+      }
     }
   }
 
-  private selectMode(mode: GameMode): void {
+  private selectAIMode(mode: AIMode): void {
     this.engine.audio.sonarPing();
-    this.engine.gameMode = mode;
+    this.engine.gameMode = this.selectedGameMode!;
+    this.engine.aiMode = mode;
+    if (mode === "llm") {
+      this.engine.costTracker = new CostTracker(0.50);
+    }
     this.engine.switchScene(SCENES.PLACEMENT);
+  }
+
+  private renderGameModeSelect(ctx: CanvasRenderingContext2D, cx: number): void {
+    ctx.font = `48px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("GAME MODE", cx, 80);
+
+    ctx.font = `16px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("Select your battle configuration", cx, 130);
+
+    this.drawTile(ctx, cx - 180, 200, "CLASSIC", "5 Ships\nStandard Fleet", [5, 5, 4, 3, 3]);
+    this.drawTile(ctx, cx + 180, 200, "ADVANCED", "7 Ships\nExpanded Fleet", [5, 5, 4, 3, 3, 3, 2]);
+  }
+
+  private renderAIModeSelect(ctx: CanvasRenderingContext2D, cx: number): void {
+    ctx.font = `48px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("AI OPPONENT", cx, 60);
+
+    ctx.font = `16px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText(
+      `${this.selectedGameMode!.toUpperCase()} mode selected — choose your opponent`,
+      cx, 110,
+    );
+
+    // Fast AI tile
+    const fastX = cx - 180;
+    const fastY = 220;
+    const tileW = 280;
+    const tileH = 300;
+    const fastHover = this.inRect(this.mx, this.my, fastX - tileW / 2, fastY, tileW, tileH);
+
+    ctx.fillStyle = fastHover ? hex(C.DIM_GREEN) : hex(C.DARK_GREEN);
+    ctx.beginPath();
+    ctx.roundRect(fastX - tileW / 2, fastY, tileW, tileH, 10);
+    ctx.fill();
+    ctx.strokeStyle = hex(C.GREEN);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.font = `28px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("FAST AI", fastX, fastY + 40);
+
+    ctx.font = `14px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("Algorithmic", fastX, fastY + 80);
+    ctx.fillText("Hunt & Target", fastX, fastY + 105);
+
+    ctx.font = `13px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("Free", fastX, fastY + 155);
+    ctx.fillText("Instant response", fastX, fastY + 180);
+    ctx.fillText("Deterministic strategy", fastX, fastY + 205);
+
+    ctx.font = `16px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("COST: FREE", fastX, fastY + tileH - 30);
+
+    // LLM AI tile
+    const llmX = cx + 180;
+    const llmY = 220;
+    const llmHover = this.inRect(this.mx, this.my, llmX - tileW / 2, llmY, tileW, tileH);
+
+    ctx.fillStyle = llmHover ? hex(C.DIM_GREEN) : hex(C.DARK_GREEN);
+    ctx.beginPath();
+    ctx.roundRect(llmX - tileW / 2, llmY, tileW, tileH, 10);
+    ctx.fill();
+    ctx.strokeStyle = "#ff9900";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.font = `28px ${FONT}`;
+    ctx.fillStyle = "#ff9900";
+    ctx.fillText("LLM AI", llmX, llmY + 40);
+
+    ctx.font = `14px ${FONT}`;
+    ctx.fillStyle = "#ff9900";
+    ctx.fillText("Claude (Anthropic)", llmX, llmY + 80);
+    ctx.fillText("Reasoning-based", llmX, llmY + 105);
+
+    ctx.font = `13px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("~$0.10-0.50 per game", llmX, llmY + 155);
+    ctx.fillText("1-3s per move", llmX, llmY + 180);
+    ctx.fillText("Adaptive strategy", llmX, llmY + 205);
+
+    ctx.font = `12px ${FONT}`;
+    ctx.fillStyle = "#cc6600";
+    ctx.fillText("Requires API key in .env.local", llmX, llmY + 240);
+
+    ctx.font = `16px ${FONT}`;
+    ctx.fillStyle = "#ff9900";
+    ctx.fillText("COST: ~$0.10-0.50", llmX, llmY + tileH - 30);
+
+    // Back button
+    const backHover = this.inRect(this.mx, this.my, 30, CANVAS_H - 60, 100, 36);
+    ctx.fillStyle = backHover ? hex(C.DIM_GREEN) : hex(C.DARK_GREEN);
+    ctx.beginPath();
+    ctx.roundRect(30, CANVAS_H - 60, 100, 36, 6);
+    ctx.fill();
+    ctx.strokeStyle = hex(C.GREEN);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.font = `14px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("< BACK", 80, CANVAS_H - 42);
   }
 
   private drawTile(

@@ -1,7 +1,8 @@
 import { CANVAS_W, CANVAS_H } from "./config";
-import { GameMode } from "./types";
+import { GameMode, AIMode } from "./types";
 import { Board } from "./Board";
 import { AudioManager } from "./AudioManager";
+import { CostTracker } from "./CostTracker";
 
 export interface GameScene {
   enter(engine: Engine): void;
@@ -21,6 +22,8 @@ export class Engine {
   audio = new AudioManager();
 
   gameMode: GameMode = "classic";
+  aiMode: AIMode = "fast";
+  costTracker: CostTracker | null = null;
   playerBoard: Board | null = null;
   score = 0;
   playerWon = false;

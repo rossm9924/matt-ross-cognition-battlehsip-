@@ -6,6 +6,7 @@ import {
 } from "../config";
 import { Board, isShipSunk, ShotResult } from "../Board";
 import { BattleshipAI } from "../AI";
+import { LLMAI } from "../LLMAI";
 import { Engine, GameScene } from "../Engine";
 
 type Phase = "player_turn" | "animating" | "enemy_turn" | "enemy_anim";
@@ -41,7 +42,7 @@ export class BattleScene implements GameScene {
   private engine!: Engine;
   private playerBoard!: Board;
   private enemyBoard!: Board;
-  private ai!: BattleshipAI;
+  private ai!: BattleshipAI | LLMAI;
   private phase: Phase = "player_turn";
   private score = 0;
   private mx = 0;
@@ -54,6 +55,8 @@ export class BattleScene implements GameScene {
   private particles: FxParticle[] = [];
   private sweepX = 0;
   private fleet!: ShipConfig[];
+  private llmLoading = false;
+  private llmSwitchedToFast = false;
 
   enter(engine: Engine): void {
     this.engine = engine;
@@ -62,8 +65,14 @@ export class BattleScene implements GameScene {
     this.enemyBoard = new Board();
     this.enemyBoard.placeRandom(this.fleet);
     const minLen = Math.min(...this.fleet.map((f) => f.length));
-    this.ai = new BattleshipAI(minLen);
+    if (engine.aiMode === "llm" && engine.costTracker) {
+      this.ai = new LLMAI("/api/anthropic", engine.costTracker, minLen);
+    } else {
+      this.ai = new BattleshipAI(minLen);
+    }
     this.score = 0;
+    this.llmLoading = false;
+    this.llmSwitchedToFast = false;
     this.phase = "player_turn";
     this.viewMode = "radar";
     this.fadeAlpha = 1;
@@ -432,12 +441,35 @@ export class BattleScene implements GameScene {
     ctx.fillStyle = hex(C.GREEN);
     ctx.fillText(`SCORE: ${this.score}`, CANVAS_W - 30, CANVAS_H - 20);
 
+    // LLM cost display
+    if (this.engine.aiMode === "llm" && this.engine.costTracker) {
+      const cost = this.engine.costTracker.getCost();
+      ctx.textAlign = "right";
+      ctx.font = `12px ${FONT}`;
+      ctx.fillStyle = this.engine.costTracker.isOverLimit() ? hex(C.HIT_RED) : "#ff9900";
+      ctx.fillText(`LLM COST: $${cost.toFixed(4)}`, CANVAS_W - 30, CANVAS_H - 42);
+      if (this.llmSwitchedToFast) {
+        ctx.font = `10px ${FONT}`;
+        ctx.fillStyle = hex(C.HIT_RED);
+        ctx.fillText("LIMIT REACHED - FAST AI", CANVAS_W - 30, CANVAS_H - 58);
+      }
+    }
+
+    // Loading indicator for LLM
+    if (this.llmLoading) {
+      ctx.textAlign = "center";
+      ctx.font = `16px ${FONT}`;
+      ctx.fillStyle = "#ff9900";
+      const dots = ".".repeat(Math.floor(Date.now() / 500) % 4);
+      ctx.fillText(`AI THINKING${dots}`, CANVAS_W / 2, CANVAS_H / 2);
+    }
+
     // Mute icon
     ctx.fillStyle = "#222";
     ctx.fillRect(CANVAS_W - 56, 6, 32, 28);
     ctx.font = "20px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 40, 20);
+    ctx.fillText(this.engine.audio.muted ? "\uD83D\uDD07" : "\uD83D\uDD0A", CANVAS_W - 40, 20);
 
     // Status text (iso view)
     if (this.viewMode === "iso") {
@@ -563,8 +595,46 @@ export class BattleScene implements GameScene {
   /* ============ AI ============ */
 
   private doEnemyTurn(): void {
+    if (this.ai instanceof LLMAI) {
+      this.doEnemyTurnAsync();
+    } else {
+      this.doEnemyTurnSync();
+    }
+  }
+
+  private doEnemyTurnSync(): void {
     this.phase = "enemy_anim";
-    const coord = this.ai.getNextShot();
+    const ai = this.ai as BattleshipAI;
+    const coord = ai.getNextShot();
+    this.executeEnemyShot(coord);
+  }
+
+  private doEnemyTurnAsync(): void {
+    this.phase = "enemy_anim";
+    this.llmLoading = true;
+    this.status = "AI is thinking...";
+
+    const llmAI = this.ai as LLMAI;
+    const wasFallback = llmAI.isFallbackActive;
+
+    llmAI.getNextShot(this.playerBoard).then((coord) => {
+      this.llmLoading = false;
+
+      if (!wasFallback && llmAI.isFallbackActive && !this.llmSwitchedToFast) {
+        this.llmSwitchedToFast = true;
+        this.status = "Cost limit reached — switched to Fast AI";
+      }
+
+      this.executeEnemyShot(coord);
+    }).catch(() => {
+      this.llmLoading = false;
+      const fallbackAI = new BattleshipAI(2);
+      const coord = fallbackAI.getNextShot();
+      this.executeEnemyShot(coord);
+    });
+  }
+
+  private executeEnemyShot(coord: { row: number; col: number }): void {
     const result = this.playerBoard.processShot(coord.row, coord.col);
     this.ai.recordResult(coord, result.hit, result.sunkShip);
 

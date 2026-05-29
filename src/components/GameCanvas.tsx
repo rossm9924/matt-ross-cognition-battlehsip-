@@ -3,9 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 import { createGame } from "@/game/setup";
 import { Engine } from "@/game/Engine";
+import type { AIMode } from "@/game/types";
 
 const MIN_WIDTH = 480;
 const MIN_HEIGHT = 360;
+
+function getPreferredAIMode(): AIMode | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = params.get("ai");
+  if (fromUrl === "llm" || fromUrl === "fast") return fromUrl;
+  const stored = localStorage.getItem("battleshipAIMode");
+  if (stored === "llm" || stored === "fast") return stored;
+  return null;
+}
 
 export default function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -25,7 +36,13 @@ export default function GameCanvas() {
     if (!containerRef.current || engineRef.current) return;
     // Clear any stale canvases (React strict mode double-mount)
     containerRef.current.innerHTML = "";
-    engineRef.current = createGame(containerRef.current);
+    const engine = createGame(containerRef.current);
+    engineRef.current = engine;
+
+    const preferred = getPreferredAIMode();
+    if (preferred) {
+      engine.aiMode = preferred;
+    }
 
     return () => {
       engineRef.current?.destroy();
