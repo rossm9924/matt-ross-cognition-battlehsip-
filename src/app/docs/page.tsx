@@ -21,20 +21,27 @@ interface Bug {
   title: string;
   what: string;
   found: string;
-  foundMethod: "e2e-testing" | "browser-playtesting" | "comparison-audit" | "code-review" | "regression-testing";
+  foundMethod: "e2e-testing" | "user-report" | "comparison-audit" | "devin-proactive" | "regression-testing";
   fix: string;
   commit: string;
   pr: number;
-  session: string;
+  prUrl: string;
+  sessionUrl: string;
+  sessionName: string;
+  userPrompt?: string;
 }
 
 const methodLabels: Record<Bug["foundMethod"], { label: string; color: string }> = {
   "e2e-testing": { label: "Devin E2E Testing", color: "#4dabf7" },
-  "browser-playtesting": { label: "Devin Browser Playtest", color: "#ffa94d" },
+  "user-report": { label: "User Report", color: "#ff6b6b" },
   "comparison-audit": { label: "Side-by-Side Audit", color: "#da77f2" },
-  "code-review": { label: "Devin Code Review", color: "#69db7c" },
+  "devin-proactive": { label: "Devin Proactive Fix", color: "#69db7c" },
   "regression-testing": { label: "Regression Testing", color: "#ffd43b" },
 };
+
+const SESSION_1_URL = "https://app.devin.ai/sessions/10c3385d7770434994c7834f5a55bf08";
+const PR1_URL = "https://github.com/rossm9924/matt-ross-cognition-battlehsip-/pull/1";
+const PR3_URL = "https://github.com/rossm9924/matt-ross-cognition-battlehsip-/pull/3";
 
 const bugs: Bug[] = [
   {
@@ -46,150 +53,186 @@ const bugs: Bug[] = [
     fix: "Added null-safety checks to every AI difficulty function (Easy, Medium, Hard). Each function now returns null when no cells remain, and the game loop gracefully skips the AI's turn instead of crashing.",
     commit: "f0eb085",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "duplicate-canvas",
     title: "Duplicate Canvas on Page Load",
     what: "React's Strict Mode mounts components twice in development. The game engine appended a new <canvas> each time, leaving a duplicate canvas element on the page.",
-    found: "Found by Devin during browser testing after the Canvas rewrite. Devin ran document.querySelectorAll('canvas').length in the browser console and observed 2 canvases instead of 1. This was caused by React Strict Mode double-mounting the component in development.",
-    foundMethod: "browser-playtesting",
+    found: "Reported by the user while testing the game locally on a narrow viewport. The user noticed two side-by-side <canvas> elements in the DOM, each natively 1280×800, inside a flex container. Devin confirmed via browser console that document.querySelectorAll('canvas').length returned 2. Root cause was React Strict Mode double-mounting the component.",
+    foundMethod: "user-report",
+    userPrompt: "The game uses two side-by-side <canvas> elements (each natively 1280×800) inside a flex-direction: row container with overflow: hidden.",
     fix: "The Engine's destroy() method now removes the canvas from the DOM, and the GameCanvas component clears the container's innerHTML before mounting to prevent stale elements.",
     commit: "66b2ea0",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "small-viewport",
     title: "No Small-Viewport Handling",
     what: "On narrow screens (phones, small browser windows), the canvas was clipped or unusable with no feedback to the user.",
-    found: "Identified by Devin during responsive testing. After the Canvas redesign, Devin tested the game at multiple viewport widths (600px, 700px) and confirmed that narrow windows caused the canvas to clip without any user-facing message.",
-    foundMethod: "browser-playtesting",
+    found: "Reported by the user after testing the game on a narrow browser window. The user described the layout breaking at ~266–308 px viewport width, with canvases extending off-screen in both directions and no responsive fallback.",
+    foundMethod: "user-report",
+    userPrompt: "No responsive layout / breaks on narrow viewports. At my viewport width (~266–308 px), one canvas sat at x = -111 (mostly off-screen left) and the other extended past the right edge.",
     fix: "Added a viewport-size guard that shows a friendly \"VIEWPORT TOO SMALL\" overlay when the window is smaller than 480 × 360 px, asking the user to resize or rotate their device.",
     commit: "66b2ea0",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "no-loading-state",
     title: "Blank Screen While Loading",
     what: "The game JavaScript loaded via dynamic import, leaving a completely black screen with no indication that anything was happening.",
-    found: "Noticed by Devin during browser testing of the dynamic import loading behavior. On initial page load the screen was entirely black for several seconds before the game engine initialized, with no visual feedback that anything was happening.",
-    foundMethod: "browser-playtesting",
+    found: "Identified proactively by Devin while fixing the user-reported responsive layout issues. Devin noticed the dynamic import caused a fully black screen for several seconds before the game engine initialized, with no visual feedback. Added a loading splash as part of the same UX improvement pass.",
+    foundMethod: "devin-proactive",
     fix: "Added a DOM-based loading splash (\"BATTLESHIP WAR — Loading...\") that displays instantly while the game JS downloads and initializes.",
     commit: "66b2ea0",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "text-overlap",
     title: "Text Overlap on the Placement Screen",
     what: "The \"Select a ship\" message and the \"YOUR FLEET\" panel label were drawn at overlapping vertical positions, making both unreadable.",
-    found: "Caught by Devin during browser playtesting of the ship placement flow. While testing the placement screen visually, Devin observed that the \"Mode: CLASSIC\" label and the \"Select a ship to place\" message were drawn on top of each other, making both lines of text unreadable.",
-    foundMethod: "browser-playtesting",
+    found: "Reported directly by the user after playing through the game in a browser. The user spotted that the wording at the top of the placement screen, including the shuffle area, was overlapping with other text elements.",
+    foundMethod: "user-report",
+    userPrompt: "Bugs i've spotted while playing on browser: the wording at the top including shuffle is overlapped",
     fix: "Adjusted the y-coordinates for the Mode label, status message, and fleet header so each has proper spacing and no collisions.",
     commit: "307e8ce",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "slow-animations",
     title: "Shell Animation Too Fast to See",
     what: "The shell-arc flight animation lasted only 0.6 seconds — so fast it was nearly invisible, especially on larger monitors.",
-    found: "Reported by Devin during browser playtesting. While playing through a battle, Devin noted the shell arc animation completed in roughly 0.6 seconds — so fast it was barely perceptible, especially on the isometric view. The explosion and splash particle effects also disappeared almost instantly.",
-    foundMethod: "browser-playtesting",
+    found: "Reported directly by the user while playing through the game. The user described the gameplay as \"overly fast\" when showing the rockets hitting the enemy board.",
+    foundMethod: "user-report",
+    userPrompt: "the gameplay is overly fast when showing the rockets hit the enemy board",
     fix: "Increased the shell animation duration from 0.6 s to 1.5 s, and extended the post-impact particle delay from 600 ms to 1 000 ms so players can enjoy the visual effect.",
     commit: "307e8ce",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "no-rotate-button",
     title: "No Clickable Rotate Button",
     what: "Ship orientation could only be toggled via a keyboard shortcut (R key). There was no on-screen button, which left mouse-only users stuck.",
-    found: "Found by Devin during browser playtesting of the placement screen. The only way to rotate ships was pressing the R key — there was just a text label showing \"Orientation: HORIZONTAL\" with no clickable element, leaving mouse-only users unable to rotate.",
-    foundMethod: "browser-playtesting",
+    found: "Reported directly by the user during browser playtesting. The user noticed the horizontal/vertical switch button was not present on the placement screen.",
+    foundMethod: "user-report",
+    userPrompt: "the horizontal / vertical switch button is not present",
     fix: "Added a visible, clickable rotate button to the fleet panel on the placement screen.",
     commit: "307e8ce",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "invisible-hits",
     title: "Hit Markers Were Too Small and Dim",
     what: "Hit markers on the enemy grid were small red squares with partial transparency (alpha 0.8), making them hard to distinguish from the grid background.",
-    found: "Identified by Devin during browser playtesting. While verifying hit/miss feedback on the radar grid, Devin observed that hit markers were small semi-transparent red squares that blended into the dark grid background, especially at lower viewport sizes.",
-    foundMethod: "browser-playtesting",
+    found: "Reported directly by the user after playing through a battle. The user observed that when an enemy ship was hit, the board did not show red markers clearly.",
+    foundMethod: "user-report",
+    userPrompt: "when an enemy is hit their board doesn't show red",
     fix: "Made hit markers larger (reduced padding from 3 px to 2 px), set alpha to 1.0 for full opacity, and added an orange border outline for extra contrast.",
     commit: "307e8ce",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "play-overlap",
     title: "PLAY Button Overlapping Rotate Button",
     what: "The PLAY button appeared directly on top of the rotate button, so clicking \"Play\" also triggered a rotation — or vice versa.",
-    found: "Discovered by Devin during regression testing after the rotate button was added. The new clickable rotate button was placed at the same y-position as the existing PLAY button, so both elements occupied the same space and clicks triggered both actions.",
+    found: "Discovered by Devin during regression testing after adding the rotate button fix. The new clickable rotate button was placed at the same y-position as the existing PLAY button, so both elements occupied the same space and clicks triggered both actions.",
     foundMethod: "regression-testing",
     fix: "Repositioned the PLAY button below the rotate button with a 50 px gap, and centered the mode/status text over the grid area instead of the full canvas.",
     commit: "0eab99f",
     pr: 1,
-    session: "Battleship AI shadcn game",
+    prUrl: PR1_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "miss-markers",
     title: "Miss Markers Were Invisible",
     what: "Miss markers were rendered as dark-green squares on a dark-green grid — completely invisible to the player.",
-    found: "Found during a side-by-side comparison audit of the Vercel deployment against a reference game (battleshiponline.org). While comparing the battle screens, it became clear that miss markers — rendered as rgba(34,102,34,0.5) dark-green squares — were completely invisible against the dark-green radar grid. The reference game used high-contrast white markers.",
+    found: "Found by Devin during a side-by-side comparison audit, requested by the user, comparing the Vercel deployment against the reference game (battleshiponline.org). While comparing battle screens, it became clear that miss markers — rendered as rgba(34,102,34,0.5) dark-green squares — were invisible against the dark-green radar grid. The reference game used high-contrast white markers.",
     foundMethod: "comparison-audit",
+    userPrompt: "Are you able to play the vercel deployment and the original online game (battleshiponline.org) in a browser and identify the issues with the vercel deployments UI/UX as well as user workflow bugs that need to be fixed.",
     fix: "Changed miss markers to white dots with sufficient contrast against the radar-green background.",
     commit: "5fc476b",
     pr: 3,
-    session: "Battleship AI shadcn game",
+    prUrl: PR3_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "fleet-disappears",
     title: "Fleet Panel Disappeared After Placement",
     what: "Once all ships were placed or shuffled, the fleet status list vanished from the sidebar, giving the player no reference of their fleet.",
-    found: "Identified during the side-by-side comparison audit against battleshiponline.org. After clicking SHUFFLE, the fleet panel on the right side of the placement screen went blank because the code iterated over the \"remaining\" ships array (which was empty after all ships were placed) instead of the full fleet list.",
+    found: "Identified by Devin during the same side-by-side comparison audit against battleshiponline.org. After clicking SHUFFLE, the fleet panel on the right side of the placement screen went blank because the code iterated over the \"remaining\" ships array (empty after all placed) instead of the full fleet list.",
     foundMethod: "comparison-audit",
     fix: "Made the fleet panel persistent with checkmark indicators showing placed vs. unplaced status after ships are positioned or shuffled.",
     commit: "5fc476b",
     pr: 3,
-    session: "Battleship AI shadcn game",
+    prUrl: PR3_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "no-top-bar",
     title: "No Persistent Navigation Bar",
     what: "During gameplay, there was no way to access Help, Quit, or toggle Sound without restarting the game. These controls only appeared on certain screens.",
-    found: "Identified during the side-by-side comparison audit. The reference game had persistent navigation controls accessible from every screen. In Battleship War, the Help (?) and Sound icons only appeared on the title screen, and there was no Quit button at all during battle — forcing players to reload the page to exit.",
+    found: "Identified by Devin during the side-by-side comparison audit. The reference game had persistent navigation controls on every screen. In Battleship War, Help (?) and Sound icons only appeared on the title screen, and there was no Quit button during battle — forcing players to reload the page to exit.",
     foundMethod: "comparison-audit",
     fix: "Added a persistent top bar (?, QUIT, FAST toggle, and Sound icon) that renders on every screen except the title screen.",
     commit: "5fc476b",
     pr: 3,
-    session: "Battleship AI shadcn game",
+    prUrl: PR3_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "no-fast-mode",
     title: "No Way to Skip Cinematic Animations",
     what: "Every shot required watching the full shell-arc animation. Experienced players found this tedious after many turns.",
-    found: "Raised during the side-by-side comparison audit. With the shell animation slowed to 1.5 seconds, each full turn cycle took roughly 5–7 seconds. Over a 60+ shot game this added up to several minutes of waiting. The reference game offered fast-paced inline shot resolution.",
+    found: "Raised by Devin during the side-by-side comparison audit. With the shell animation at 1.5 seconds, each full turn cycle took ~5–7 seconds. Over a 60+ shot game this added up to several minutes of idle watching. The reference game offered fast-paced inline shot resolution.",
     foundMethod: "comparison-audit",
     fix: "Added a FAST mode toggle in the top bar. When enabled, shots resolve instantly with inline feedback instead of cinematic animations.",
     commit: "5fc476b",
     pr: 3,
-    session: "Battleship AI shadcn game",
+    prUrl: PR3_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
   {
     id: "ship-vanishes-on-select",
     title: "Ship Vanished When Selected for Rotation",
     what: "Clicking a placed ship to rotate it immediately removed it from the board, making the player lose visual reference of where it was.",
-    found: "Caught during continued audit testing of the placement flow. When a player clicked on an already-placed ship to reposition or rotate it, the code immediately removed it from the board — making the ship disappear visually. The player lost track of where the ship was and had to guess where to re-place it.",
-    foundMethod: "comparison-audit",
+    found: "Reported by the user during live browser testing. After shuffling ships and selecting one to rotate, the user observed that the ship disappeared from the board instead of staying in place while being repositioned.",
+    foundMethod: "user-report",
+    userPrompt: "when you select a ship and then scroll to the rotate button, the ship should stay in the same spot shouldn't it?",
     fix: "Ships now stay visible in-place when selected. The rotate button rotates the ship at its current position, and it only moves when the player clicks a new grid cell. If rotation is blocked by other ships, the ship stays in its original orientation with a message.",
     commit: "162904e",
     pr: 3,
-    session: "Battleship AI shadcn game",
+    prUrl: PR3_URL,
+    sessionUrl: SESSION_1_URL,
+    sessionName: "Battleship AI shadcn game",
   },
 ];
 
@@ -305,14 +348,21 @@ export default function DocsPage() {
             <strong>{bugs.length} bugs</strong> were identified — ranging from
             game-crashing errors to subtle visual glitches. Bugs were
             discovered through several methods:{" "}
-            <strong>automated E2E testing</strong> (Devin playing through
-            full games),{" "}
-            <strong>browser playtesting</strong> (manual visual inspection),{" "}
-            <strong>side-by-side comparison audits</strong> (comparing the
-            Vercel deployment against reference games like battleshiponline.org),
-            and <strong>regression testing</strong> (re-testing after fixes).
-            Each entry below shows how the bug was found, what it was, and
-            which PR fixed it.
+            <strong style={{ color: "#ff6b6b" }}>user reports</strong> (direct
+            feedback from the developer while playtesting),{" "}
+            <strong style={{ color: "#4dabf7" }}>automated E2E testing</strong>{" "}
+            (Devin playing through full games),{" "}
+            <strong style={{ color: "#da77f2" }}>side-by-side comparison audits</strong>{" "}
+            (comparing the Vercel deployment against{" "}
+            <a href="https://www.battleshiponline.org/" style={styles.extLink} target="_blank" rel="noopener noreferrer">
+              battleshiponline.org
+            </a>),{" "}
+            <strong style={{ color: "#ffd43b" }}>regression testing</strong>{" "}
+            (re-testing after fixes), and{" "}
+            <strong style={{ color: "#69db7c" }}>proactive Devin fixes</strong>{" "}
+            (issues Devin found and fixed independently).
+            Each entry below links to the PR and Devin session where the
+            bug was found. User-reported bugs include the original prompt.
           </p>
 
           <div style={styles.bugGrid}>
@@ -334,10 +384,21 @@ export default function DocsPage() {
                     >
                       {method.label}
                     </span>
-                    <span style={styles.commitBadge}>PR #{b.pr}</span>
+                    <a href={b.prUrl} style={styles.linkBadge} target="_blank" rel="noopener noreferrer">
+                      PR #{b.pr}
+                    </a>
+                    <a href={b.sessionUrl} style={styles.linkBadge} target="_blank" rel="noopener noreferrer">
+                      Session
+                    </a>
                     <span style={styles.commitBadge}>{b.commit}</span>
                   </div>
                   <p style={styles.bugFound}>{b.found}</p>
+                  {b.userPrompt && (
+                    <div style={styles.promptBox}>
+                      <span style={styles.promptLabel}>User prompt:</span>
+                      <q style={styles.promptText}>{b.userPrompt}</q>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -372,6 +433,12 @@ export default function DocsPage() {
                     {method.label}
                   </span>
                 </div>
+                {b.userPrompt && (
+                  <div style={{ ...styles.promptBox, marginBottom: 16 }}>
+                    <span style={styles.promptLabel}>User prompt:</span>
+                    <q style={styles.promptText}>{b.userPrompt}</q>
+                  </div>
+                )}
                 <div style={styles.fixThreeCol}>
                   <div style={styles.fixCol}>
                     <span style={styles.colLabel}>How It Was Found</span>
@@ -387,11 +454,15 @@ export default function DocsPage() {
                   </div>
                 </div>
                 <div style={styles.commitRef}>
-                  PR&nbsp;<code style={styles.code}>#{b.pr}</code>
+                  <a href={b.prUrl} style={styles.refLink} target="_blank" rel="noopener noreferrer">
+                    PR #{b.pr}
+                  </a>
                   &nbsp;·&nbsp;Commit&nbsp;
                   <code style={styles.code}>{b.commit}</code>
-                  &nbsp;·&nbsp;Session:&nbsp;
-                  <span style={{ color: "#888" }}>{b.session}</span>
+                  &nbsp;·&nbsp;
+                  <a href={b.sessionUrl} style={styles.refLink} target="_blank" rel="noopener noreferrer">
+                    {b.sessionName}
+                  </a>
                 </div>
               </div>
             );
@@ -510,6 +581,11 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 8,
   },
   intro: { fontSize: 16, lineHeight: 1.7, color: "#bbb", marginBottom: 20 },
+  extLink: {
+    color: "#da77f2",
+    textDecoration: "underline",
+    textUnderlineOffset: 2,
+  },
   p: { fontSize: 15, lineHeight: 1.7, color: "#ccc", marginBottom: 12 },
   list: {
     fontSize: 15,
@@ -579,7 +655,42 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.5,
     marginLeft: "auto",
   },
-  bugFound: { fontSize: 13, lineHeight: 1.6, color: "#888", margin: 0, fontStyle: "italic" },
+  bugFound: { fontSize: 13, lineHeight: 1.6, color: "#888", margin: 0, marginBottom: 8, fontStyle: "italic" },
+  linkBadge: {
+    display: "inline-block",
+    fontSize: 11,
+    color: "#4dabf7",
+    backgroundColor: "#1a1a2a",
+    padding: "3px 8px",
+    borderRadius: 4,
+    fontFamily: "monospace",
+    textDecoration: "none",
+    border: "1px solid #4dabf733",
+  },
+  promptBox: {
+    backgroundColor: "#1a1212",
+    border: "1px solid #ff6b6b33",
+    borderRadius: 6,
+    padding: "10px 14px",
+    marginTop: 6,
+  },
+  promptLabel: {
+    display: "block",
+    fontSize: 10,
+    textTransform: "uppercase" as const,
+    letterSpacing: 1.5,
+    color: "#ff6b6b",
+    marginBottom: 4,
+    fontWeight: 600,
+  },
+  promptText: {
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: "#ccc",
+    fontStyle: "italic",
+    margin: 0,
+    quotes: '"\u201C" "\u201D"',
+  },
   commitBadge: {
     display: "inline-block",
     marginTop: 12,
@@ -626,6 +737,10 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 16,
     fontSize: 12,
     color: "#555",
+  },
+  refLink: {
+    color: "#4dabf7",
+    textDecoration: "none",
   },
   code: {
     backgroundColor: "#1a1a1a",
