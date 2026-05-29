@@ -50,37 +50,25 @@ interface BoardState {
 type Difficulty = "easy" | "normal" | "hard";
 
 function buildSystemPrompt(difficulty: Difficulty): string {
-  const base = `You are a Battleship AI opponent playing on a 10x10 grid (rows A-J, columns 1-10).
+  const base = `OUTPUT FORMAT: You must respond with exactly one JSON object and nothing else.
+{"row": <0-9>, "col": <0-9>, "reasoning": "<1 sentence>"}
 
-RULES:
-- Rows labeled A-J (A=row 0, B=row 1, ... J=row 9). Columns 1-10 (1=col 0, 2=col 1, ... 10=col 9).
-- Ships are placed horizontally or vertically, never diagonally. Ships cannot overlap.
-- You must choose a cell you haven't already fired at (not marked X or O).
+You are a Battleship AI on a 10x10 grid. Rows A-J (A=0..J=9), Columns 1-10 (1=col 0..10=col 9).
+Do not fire at cells marked X (hit) or O (miss).
 
 `;
 
   const strategies: Record<Difficulty, string> = {
-    easy: `STRATEGY: You are a casual player. Pick cells somewhat randomly. Don't overthink it — just pick an unexplored cell. You can occasionally make smart moves but mostly play casually. Sometimes pick cells near hits, sometimes don't.`,
+    easy: `Play casually. Pick somewhat random unexplored cells.`,
 
-    normal: `STRATEGY: You are a competent player using hunt-and-target strategy.
-- In HUNT mode (no unsunk hits): fire at random unexplored cells, loosely preferring a checkerboard pattern.
-- In TARGET mode (unsunk hits exist): fire at cells adjacent to unsunk hits to determine ship orientation, then follow the line until the ship sinks.
-- Once a ship sinks, return to hunt mode.`,
+    normal: `Use hunt-and-target: random shots in hunt mode, adjacent shots near unsunk hits in target mode.`,
 
-    hard: `STRATEGY: You are an expert player using advanced probability analysis.
-- Calculate probability density: for each remaining ship, count how many valid placements pass through each unexplored cell. Target the cell with the highest total count.
-- When you have unsunk hits, strongly prioritize extending along the detected axis. Consider both endpoints.
-- Use parity optimization: for the smallest remaining ship of length L, only consider cells where (row + col) % L == 0 in hunt mode.
-- Eliminate impossible positions: cells surrounded by misses or board edges can't contain ships.
-- Consider remaining ship lengths to narrow possible positions.`,
+    hard: `Use probability density analysis. Prioritize extending unsunk hit sequences along their axis. Use parity optimization for hunt mode.`,
   };
 
   return base + strategies[difficulty] + `
 
-You MUST respond with ONLY a JSON object in this exact format:
-{"row": <number 0-9>, "col": <number 0-9>, "reasoning": "<brief 1-2 sentence explanation>"}
-
-No other text, no markdown, no code blocks. Just the raw JSON.`;
+Respond with ONLY the JSON object. No explanation outside the JSON.`;
 }
 
 function buildUserPrompt(board: BoardState): string {
@@ -185,38 +173,63 @@ export async function POST(request: Request) {
     const systemPrompt = buildSystemPrompt(difficulty || "normal");
     const userPrompt = buildUserPrompt(boardState);
 
-    const message = await client.messages.create({
-      model: modelId,
-      max_tokens: 256,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
+    const maxAttempts = 3;
+    let lastError: Error | null = null;
+    let totalTokens = 0;
 
-    const text =
-      message.content[0].type === "text" ? message.content[0].text : "";
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const messages: { role: "user"; content: string }[] =
+        attempt === 0
+          ? [{ role: "user", content: userPrompt }]
+          : [
+              {
+                role: "user",
+                content:
+                  userPrompt +
+                  "\n\nIMPORTANT: Respond with ONLY a JSON object like {\"row\": 0, \"col\": 0, \"reasoning\": \"...\"} — nothing else.",
+              },
+            ];
 
-    // Extract first complete JSON object from response
-    const parsed = extractJson(text);
-    const row = Math.max(0, Math.min(9, Math.floor(parsed.row)));
-    const col = Math.max(0, Math.min(9, Math.floor(parsed.col)));
+      const message = await client.messages.create({
+        model: modelId,
+        max_tokens: 512,
+        system: systemPrompt,
+        messages,
+      });
 
-    return Response.json({
-      row,
-      col,
-      reasoning: parsed.reasoning || "",
-      model: modelId,
-      tokensUsed:
+      totalTokens +=
         (message.usage?.input_tokens || 0) +
-        (message.usage?.output_tokens || 0),
-    });
+        (message.usage?.output_tokens || 0);
+
+      const text =
+        message.content[0].type === "text" ? message.content[0].text : "";
+
+      try {
+        const parsed = extractJson(text);
+        const row = Math.max(0, Math.min(9, Math.floor(parsed.row)));
+        const col = Math.max(0, Math.min(9, Math.floor(parsed.col)));
+
+        return Response.json({
+          row,
+          col,
+          reasoning: parsed.reasoning || "",
+          model: modelId,
+          tokensUsed: totalTokens,
+        });
+      } catch (e) {
+        lastError = e instanceof Error ? e : new Error(String(e));
+      }
+    }
+
+    throw lastError || new Error("Failed to parse AI response after retries");
   } catch (error) {
     console.error("AI move error:", error);
     const message = error instanceof Error ? error.message : String(error);
     const isAuthError =
       message.includes("401") ||
-      message.includes("authentication") ||
-      message.includes("invalid") ||
-      message.includes("api_key");
+      message.includes("authentication_error") ||
+      message.includes("invalid x-api-key") ||
+      message.includes("invalid api key");
     return Response.json(
       {
         error: "Failed to get AI move",
