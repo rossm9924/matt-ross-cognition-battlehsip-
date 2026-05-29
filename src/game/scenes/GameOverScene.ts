@@ -108,7 +108,7 @@ export class GameOverScene implements GameScene {
     const stats = [
       [`Shots Fired: ${shotsFired}`, `Hits: ${shotsHit}`],
       [`Accuracy: ${accuracy}%`, `Ships Lost: ${shipsLost}`],
-      [`Time: ${elapsed}`, `Difficulty: ${this.engine.difficulty.toUpperCase()}`],
+      [`Time: ${elapsed}`, `AI: ${this.engine.useLlm ? "Claude" : this.engine.difficulty.toUpperCase()}`],
     ];
 
     stats.forEach((row, i) => {

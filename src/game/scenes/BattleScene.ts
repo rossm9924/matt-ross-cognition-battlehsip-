@@ -6,9 +6,10 @@ import {
 } from "../config";
 import { Board, isShipSunk } from "../Board";
 import { BattleshipAI } from "../AI";
+import { LlmAI } from "../LlmAI";
 import { Engine, GameScene } from "../Engine";
 
-type Phase = "player_turn" | "animating" | "enemy_turn" | "enemy_anim";
+type Phase = "player_turn" | "animating" | "enemy_turn" | "enemy_anim" | "enemy_thinking";
 
 // Dual-grid layout: center just the two grids on canvas, fleet panels float to the right
 const CELL = 36;
@@ -41,6 +42,7 @@ export class BattleScene implements GameScene {
   private playerBoard!: Board;
   private enemyBoard!: Board;
   private ai!: BattleshipAI;
+  private llmAi: LlmAI | null = null;
   private phase: Phase = "player_turn";
   private score = 0;
   private mx = 0;
@@ -51,6 +53,8 @@ export class BattleScene implements GameScene {
   private showInfo = false;
   private log: LogEntry[] = [];
   private sunkBanner: SunkBanner | null = null;
+  private thinkingDots = 0;
+  private thinkingTimer = 0;
 
   // Keyboard cursor
   private cursorRow = 0;
@@ -65,20 +69,38 @@ export class BattleScene implements GameScene {
     this.enemyBoard.placeRandom(this.fleet);
     const minLen = Math.min(...this.fleet.map((f) => f.length));
     this.ai = new BattleshipAI(minLen, engine.difficulty);
+    this.llmAi = engine.useLlm
+      ? new LlmAI(this.playerBoard, engine.difficulty)
+      : null;
     this.score = 0;
     this.phase = "player_turn";
     this.log = [];
     this.sunkBanner = null;
+    this.thinkingDots = 0;
+    this.thinkingTimer = 0;
     this.cursorRow = 0;
     this.cursorCol = 0;
     this.cursorActive = false;
     this.showInfo = false;
     this.status = "YOUR TURN — Click enemy grid to fire";
+    if (engine.useLlm) {
+      this.addLog("Claude Sonnet is your opponent", "#a855f7");
+    }
     engine.resetStats();
   }
 
   update(dt: number): void {
     this.sweepX = (this.sweepX + 120 * dt) % GRID_PX;
+
+    // Animate thinking dots
+    if (this.phase === "enemy_thinking") {
+      this.thinkingTimer += dt;
+      if (this.thinkingTimer > 0.4) {
+        this.thinkingTimer = 0;
+        this.thinkingDots = (this.thinkingDots + 1) % 4;
+        this.status = "Claude is thinking" + ".".repeat(this.thinkingDots);
+      }
+    }
 
     // Fade sunk banner
     if (this.sunkBanner) {
@@ -224,6 +246,13 @@ export class BattleScene implements GameScene {
     ctx.font = `18px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
     ctx.fillText("BATTLE STATION", CANVAS_W / 2, 18);
+
+    // Claude AI indicator
+    if (this.llmAi) {
+      ctx.font = `10px ${FONT}`;
+      ctx.fillStyle = "#a855f7";
+      ctx.fillText("vs CLAUDE", CANVAS_W / 2 - 120, 18);
+    }
 
     // Help
     ctx.font = `14px ${FONT}`;
@@ -520,6 +549,9 @@ export class BattleScene implements GameScene {
     if (this.phase === "player_turn") {
       ctx.fillStyle = hex(C.GREEN);
       ctx.fillText("▶ YOUR TURN", E_GX + GRID_PX / 2, E_GY + GRID_PX + 28);
+    } else if (this.phase === "enemy_thinking") {
+      ctx.fillStyle = "#a855f7";
+      ctx.fillText("🧠 CLAUDE THINKING" + ".".repeat(this.thinkingDots), E_GX + GRID_PX / 2, E_GY + GRID_PX + 28);
     } else {
       ctx.fillStyle = hex(C.DIM_GREEN);
       ctx.fillText("⏳ OPPONENT'S TURN", E_GX + GRID_PX / 2, E_GY + GRID_PX + 28);
@@ -576,31 +608,64 @@ export class BattleScene implements GameScene {
   /* ============ AI ============ */
 
   private doEnemyTurn(): void {
+    if (this.llmAi) {
+      this.doLlmEnemyTurn();
+      return;
+    }
+
     this.phase = "enemy_anim";
     const coord = this.ai.getNextShot();
     const result = this.playerBoard.processShot(coord.row, coord.col);
     this.ai.recordResult(coord, result.hit, result.sunkShip);
+    this.processEnemyShotResult(coord, result);
+  }
+
+  private doLlmEnemyTurn(): void {
+    this.phase = "enemy_thinking";
+    this.thinkingDots = 0;
+    this.thinkingTimer = 0;
+    this.status = "Claude is thinking";
+
+    this.llmAi!.getNextShot().then((coord) => {
+      this.phase = "enemy_anim";
+
+      // Show Claude's reasoning in the log
+      if (this.llmAi!.lastReasoning) {
+        this.addLog(`Claude: ${this.llmAi!.lastReasoning}`, "#a855f7");
+      }
+
+      const result = this.playerBoard.processShot(coord.row, coord.col);
+      this.llmAi!.recordResult(coord, result.hit);
+      this.processEnemyShotResult(coord, result);
+    });
+  }
+
+  private processEnemyShotResult(
+    coord: { row: number; col: number },
+    result: { hit: boolean; sunkShip: import("../Board").ShipInstance | null },
+  ): void {
+    const label = this.llmAi ? "Claude" : "AI";
 
     if (result.hit) {
       this.engine.audio.explosion();
       if (result.sunkShip) {
         this.engine.shipsLost++;
         this.engine.audio.sinkGroan();
-        this.status = `AI sank your ${result.sunkShip.config.name}!`;
-        this.addLog(`AI SUNK your ${result.sunkShip.config.name}!`, hex(C.HIT_RED));
+        this.status = `${label} sank your ${result.sunkShip.config.name}!`;
+        this.addLog(`${label} SUNK your ${result.sunkShip.config.name}!`, hex(C.HIT_RED));
         this.sunkBanner = {
           text: `YOUR ${result.sunkShip.config.name.toUpperCase()} SUNK`,
           alpha: 1.5,
           y: CANVAS_H / 2 - 20,
         };
       } else {
-        this.status = `AI hit at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}!`;
-        this.addLog(`AI HIT at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}`, "#ff8844");
+        this.status = `${label} hit at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}!`;
+        this.addLog(`${label} HIT at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}`, "#ff8844");
       }
     } else {
       this.engine.audio.splash();
-      this.status = `AI missed at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}.`;
-      this.addLog(`AI miss at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}`, hex(C.DIM_GREEN));
+      this.status = `${label} missed at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}.`;
+      this.addLog(`${label} miss at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}`, hex(C.DIM_GREEN));
     }
 
     setTimeout(() => {

@@ -22,6 +22,7 @@ export class Engine {
 
   gameMode: GameMode = "classic";
   difficulty: Difficulty = "normal";
+  useLlm = false;
   playerBoard: Board | null = null;
   score = 0;
   playerWon = false;

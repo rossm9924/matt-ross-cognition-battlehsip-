@@ -7,11 +7,13 @@ export class ModeSelectScene implements GameScene {
   private mx = 0;
   private my = 0;
   private selectedDifficulty: Difficulty = "normal";
+  private useLlm = false;
   private showInfo = false;
 
   enter(engine: Engine): void {
     this.engine = engine;
     this.selectedDifficulty = engine.difficulty;
+    this.useLlm = engine.useLlm;
     this.showInfo = false;
   }
 
@@ -42,22 +44,25 @@ export class ModeSelectScene implements GameScene {
     ctx.textBaseline = "middle";
     ctx.font = `42px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("GAME MODE", cx, 130);
+    ctx.fillText("GAME MODE", cx, 100);
 
     ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText("Select your battle configuration", cx, 165);
+    ctx.fillText("Select your battle configuration", cx, 130);
 
-    // Mode tiles
-    this.drawTile(ctx, cx - 180, 200, "CLASSIC",
-      "Standard 10×10 grid\n5 ships: Carrier, Battleship,\nCruiser, Submarine, Destroyer",
+    // Mode tiles — shifted up to make room for AI toggle
+    this.drawTile(ctx, cx - 180, 160, "CLASSIC",
+      "Standard 10x10 grid\n5 ships: Carrier, Battleship,\nCruiser, Submarine, Destroyer",
       [5, 4, 3, 3, 2]);
-    this.drawTile(ctx, cx + 180, 200, "ADVANCED",
-      "Standard 10×10 grid\n7 ships: adds Frigate\nand Patrol Boat",
+    this.drawTile(ctx, cx + 180, 160, "ADVANCED",
+      "Standard 10x10 grid\n7 ships: adds Frigate\nand Patrol Boat",
       [5, 4, 3, 3, 3, 2, 2]);
 
+    // AI opponent toggle
+    this.drawAIToggle(ctx, cx, 520);
+
     // Difficulty selector
-    this.drawDifficultySelector(ctx, cx, 580);
+    this.drawDifficultySelector(ctx, cx, 620);
 
     // Mute label on hover
     if (this.mx > W - 60 && this.my < 36) {
@@ -92,15 +97,17 @@ export class ModeSelectScene implements GameScene {
       ctx.textBaseline = "middle";
       const lines = [
         "BATTLESHIP WAR — RULES", "",
-        "Place your fleet on the 10×10 grid.",
+        "Place your fleet on the 10x10 grid.",
         "Take turns firing at the enemy grid.",
         "Hit = red marker, Miss = white dot.",
         "Sink all enemy ships to win!", "",
         "Use arrow keys + Enter to fire.",
         "R to rotate ships during placement.", "",
+        "CLAUDE AI uses Anthropic's Claude",
+        "to reason about each shot.", "",
         "Click anywhere to close.",
       ];
-      lines.forEach((l, i) => ctx.fillText(l, cx, H / 2 - 120 + i * 28));
+      lines.forEach((l, i) => ctx.fillText(l, cx, H / 2 - 140 + i * 26));
     }
   }
 
@@ -134,12 +141,28 @@ export class ModeSelectScene implements GameScene {
     const cx = CANVAS_W / 2;
 
     // Classic tile
-    if (this.inRect(x, y, cx - 180 - 130, 200, 260, 340)) {
+    if (this.inRect(x, y, cx - 180 - 130, 160, 260, 320)) {
       this.selectMode("classic");
     }
     // Advanced tile
-    if (this.inRect(x, y, cx + 180 - 130, 200, 260, 340)) {
+    if (this.inRect(x, y, cx + 180 - 130, 160, 260, 320)) {
       this.selectMode("advanced");
+    }
+
+    // AI toggle buttons
+    const toggleY = 550;
+    const tbW = 180;
+    const gap = 20;
+    const classicX = cx - gap / 2 - tbW;
+    const claudeX = cx + gap / 2;
+
+    if (this.inRect(x, y, classicX, toggleY, tbW, 36)) {
+      this.useLlm = false;
+      this.engine.useLlm = false;
+    }
+    if (this.inRect(x, y, claudeX, toggleY, tbW, 36)) {
+      this.useLlm = true;
+      this.engine.useLlm = true;
     }
 
     // Difficulty buttons
@@ -148,7 +171,7 @@ export class ModeSelectScene implements GameScene {
     const totalW = difficulties.length * btnW + (difficulties.length - 1) * 16;
     let bx = cx - totalW / 2;
     for (const diff of difficulties) {
-      if (this.inRect(x, y, bx, 610, btnW, 36)) {
+      if (this.inRect(x, y, bx, 650, btnW, 36)) {
         this.selectedDifficulty = diff;
         this.engine.difficulty = diff;
       }
@@ -160,7 +183,74 @@ export class ModeSelectScene implements GameScene {
     this.engine.audio.sonarPing();
     this.engine.gameMode = mode;
     this.engine.difficulty = this.selectedDifficulty;
+    this.engine.useLlm = this.useLlm;
     this.engine.switchScene(SCENES.PLACEMENT);
+  }
+
+  private drawAIToggle(ctx: CanvasRenderingContext2D, cx: number, y: number): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `16px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("AI OPPONENT", cx, y);
+
+    const tbW = 180;
+    const gap = 20;
+    const classicX = cx - gap / 2 - tbW;
+    const claudeX = cx + gap / 2;
+    const btnY = y + 30;
+    const btnH = 36;
+
+    // Classic AI button
+    const classicSelected = !this.useLlm;
+    const classicHover = this.inRect(this.mx, this.my, classicX, btnY, tbW, btnH);
+    ctx.fillStyle = classicSelected ? hex(C.GREEN) : (classicHover ? hex(C.DIM_GREEN) : hex(C.DARK_GREEN));
+    ctx.beginPath();
+    ctx.roundRect(classicX, btnY, tbW, btnH, 6);
+    ctx.fill();
+    if (classicSelected) {
+      ctx.strokeStyle = hex(C.GREEN);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.fillStyle = classicSelected ? "#000" : hex(C.GREEN);
+    ctx.font = `13px ${FONT}`;
+    ctx.fillText("CLASSIC AI", classicX + tbW / 2, btnY + btnH / 2);
+
+    // Claude AI button
+    const claudeSelected = this.useLlm;
+    const claudeHover = this.inRect(this.mx, this.my, claudeX, btnY, tbW, btnH);
+
+    // Purple/blue gradient for Claude
+    if (claudeSelected) {
+      const grad = ctx.createLinearGradient(claudeX, btnY, claudeX + tbW, btnY);
+      grad.addColorStop(0, "#7c3aed");
+      grad.addColorStop(1, "#a855f7");
+      ctx.fillStyle = grad;
+    } else {
+      ctx.fillStyle = claudeHover ? "#3b1f6e" : "#2a1550";
+    }
+    ctx.beginPath();
+    ctx.roundRect(claudeX, btnY, tbW, btnH, 6);
+    ctx.fill();
+    if (claudeSelected) {
+      ctx.strokeStyle = "#a855f7";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.fillStyle = claudeSelected ? "#fff" : "#a855f7";
+    ctx.font = `13px ${FONT}`;
+    ctx.fillText("CLAUDE AI", claudeX + tbW / 2, btnY + btnH / 2);
+
+    // Description below
+    ctx.font = `10px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    if (this.useLlm) {
+      ctx.fillStyle = "#a855f7";
+      ctx.fillText("Powered by Claude Sonnet — thinks about each move", cx, btnY + btnH + 16);
+    } else {
+      ctx.fillText("Algorithmic opponent — fast & offline", cx, btnY + btnH + 16);
+    }
   }
 
   private drawDifficultySelector(ctx: CanvasRenderingContext2D, cx: number, y: number): void {
@@ -168,12 +258,12 @@ export class ModeSelectScene implements GameScene {
     ctx.textBaseline = "middle";
     ctx.font = `16px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("AI DIFFICULTY", cx, y);
+    ctx.fillText("DIFFICULTY", cx, y);
 
-    const difficulties: { key: Difficulty; label: string; desc: string }[] = [
-      { key: "easy", label: "EASY", desc: "Random shots" },
-      { key: "normal", label: "NORMAL", desc: "Hunt & target" },
-      { key: "hard", label: "HARD", desc: "Parity strategy" },
+    const difficulties: { key: Difficulty; label: string; desc: string; descLlm: string }[] = [
+      { key: "easy", label: "EASY", desc: "Random shots", descLlm: "Casual strategy" },
+      { key: "normal", label: "NORMAL", desc: "Hunt & target", descLlm: "Hunt & target" },
+      { key: "hard", label: "HARD", desc: "Parity strategy", descLlm: "Expert analysis" },
     ];
 
     const btnW = 120;
@@ -200,7 +290,7 @@ export class ModeSelectScene implements GameScene {
 
       ctx.fillStyle = hex(C.DIM_GREEN);
       ctx.font = `10px ${FONT}`;
-      ctx.fillText(d.desc, bx + btnW / 2, y + 80);
+      ctx.fillText(this.useLlm ? d.descLlm : d.desc, bx + btnW / 2, y + 80);
 
       bx += btnW + 16;
     });
@@ -210,7 +300,7 @@ export class ModeSelectScene implements GameScene {
     ctx: CanvasRenderingContext2D, x: number, y: number,
     title: string, desc: string, ships: number[],
   ): void {
-    const w = 260, h = 340;
+    const w = 260, h = 320;
     const hover = this.inRect(this.mx, this.my, x - w / 2, y, w, h);
 
     ctx.fillStyle = hover ? hex(C.DIM_GREEN) : hex(C.DARK_GREEN);
@@ -235,13 +325,13 @@ export class ModeSelectScene implements GameScene {
     ships.forEach((len, i) => {
       const sw = len * 20;
       ctx.beginPath();
-      ctx.roundRect(x - sw / 2 - 30, y + 65 + i * 26, sw, 14, 3);
+      ctx.roundRect(x - sw / 2 - 30, y + 60 + i * 24, sw, 14, 3);
       ctx.fill();
 
       ctx.font = `9px ${FONT}`;
       ctx.fillStyle = hex(C.GREEN);
       ctx.textAlign = "left";
-      ctx.fillText(shipNames[i] || "", x - sw / 2 + sw - 20, y + 72 + i * 26);
+      ctx.fillText(shipNames[i] || "", x - sw / 2 + sw - 20, y + 67 + i * 24);
       ctx.textAlign = "center";
       ctx.fillStyle = "rgba(0,60,0,0.7)";
     });
@@ -250,7 +340,7 @@ export class ModeSelectScene implements GameScene {
     ctx.font = `11px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
     desc.split("\n").forEach((line, i) => {
-      ctx.fillText(line, x, y + h - 60 + i * 16);
+      ctx.fillText(line, x, y + h - 55 + i * 16);
     });
   }
 
