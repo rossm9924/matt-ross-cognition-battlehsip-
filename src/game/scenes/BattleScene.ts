@@ -557,11 +557,13 @@ export class BattleScene implements GameScene {
       ctx.fillText("⏳ OPPONENT'S TURN", E_GX + GRID_PX / 2, E_GY + GRID_PX + 28);
     }
 
-    // Keyboard hint
-    ctx.textAlign = "left";
-    ctx.font = `9px ${FONT}`;
-    ctx.fillStyle = hex(C.DARK_GREEN);
-    ctx.fillText("Arrow keys + Enter to fire", E_GX, bottomY + 16);
+    // Keyboard hint — hide when Claude AI is active (log entries need the space)
+    if (!this.llmAi) {
+      ctx.textAlign = "left";
+      ctx.font = `9px ${FONT}`;
+      ctx.fillStyle = hex(C.DARK_GREEN);
+      ctx.fillText("Arrow keys + Enter to fire", E_GX, bottomY + 16);
+    }
   }
 
   private renderSunkBanner(ctx: CanvasRenderingContext2D): void {
