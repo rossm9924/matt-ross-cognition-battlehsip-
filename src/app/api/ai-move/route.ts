@@ -1,8 +1,16 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+function getApiKey(): string | undefined {
+  return (
+    process.env.ANTHROPIC_API_KEY ||
+    process.env.CLAUDE_API_KEY ||
+    process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY
+  );
+}
+
+function getClient(): Anthropic {
+  return new Anthropic({ apiKey: getApiKey() });
+}
 
 interface BoardState {
   grid: string[][];
@@ -135,13 +143,20 @@ export async function POST(request: Request) {
       difficulty: Difficulty;
     };
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const apiKey = getApiKey();
+    if (!apiKey) {
       return Response.json(
-        { error: "ANTHROPIC_API_KEY not configured" },
+        {
+          error: "API key not configured",
+          details:
+            "Set ANTHROPIC_API_KEY or CLAUDE_API_KEY in Vercel environment variables. " +
+            "Go to Vercel → Project Settings → Environment Variables.",
+        },
         { status: 500 }
       );
     }
 
+    const client = getClient();
     const modelId = "claude-sonnet-4-20250514";
     const systemPrompt = buildSystemPrompt(difficulty || "normal");
     const userPrompt = buildUserPrompt(boardState);
@@ -171,10 +186,18 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("AI move error:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    const isAuthError =
+      message.includes("401") ||
+      message.includes("authentication") ||
+      message.includes("invalid") ||
+      message.includes("api_key");
     return Response.json(
       {
         error: "Failed to get AI move",
-        details: error instanceof Error ? error.message : String(error),
+        details: isAuthError
+          ? "Invalid API key. Check that your ANTHROPIC_API_KEY is correct and active."
+          : message,
       },
       { status: 500 }
     );

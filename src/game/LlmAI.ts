@@ -35,7 +35,9 @@ export class LlmAI {
       });
 
       if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
+        const errBody = await response.json().catch(() => ({}));
+        const detail = (errBody as { details?: string }).details || `status ${response.status}`;
+        throw new Error(detail);
       }
 
       const data: AIMoveResponse = await response.json();
@@ -51,8 +53,9 @@ export class LlmAI {
 
       this.shotSet.add(coordKey(row, col));
       return { row, col };
-    } catch {
-      this.lastReasoning = "API error — using fallback random shot";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      this.lastReasoning = `API error: ${msg}`;
       return this.getFallbackShot();
     } finally {
       this.pending = false;
