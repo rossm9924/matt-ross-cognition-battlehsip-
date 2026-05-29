@@ -158,7 +158,7 @@ export async function POST(request: Request) {
 
     const client = getClient();
     const modelId =
-      process.env.CLAUDE_MODEL || "claude-3-5-sonnet-20241022";
+      process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
     const systemPrompt = buildSystemPrompt(difficulty || "normal");
     const userPrompt = buildUserPrompt(boardState);
 
