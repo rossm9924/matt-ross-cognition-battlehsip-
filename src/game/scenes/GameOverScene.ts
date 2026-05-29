@@ -1,4 +1,8 @@
-import { SCENES, FONT, CANVAS_W, CANVAS_H, hex, C } from "../config";
+import {
+  SCENES, FONT, CANVAS_W, CANVAS_H, hex, C,
+  CLASSIC_FLEET, ADVANCED_FLEET,
+} from "../config";
+import { isShipSunk } from "../Board";
 import { Engine, GameScene } from "../Engine";
 
 export class GameOverScene implements GameScene {
@@ -62,9 +66,12 @@ export class GameOverScene implements GameScene {
     // Stats panel (#15)
     this.renderStats(ctx, cx, 290);
 
+    // Ship summary
+    this.renderShipSummary(ctx, cx, 420);
+
     // Buttons
-    this.drawBtn(ctx, cx - 140, cy + 140, 280, 50, "PLAY AGAIN");
-    this.drawBtn(ctx, cx - 140, cy + 210, 280, 50, "CHANGE MODE");
+    this.drawBtn(ctx, cx - 140, cy + 190, 280, 50, "PLAY AGAIN");
+    this.drawBtn(ctx, cx - 140, cy + 260, 280, 50, "CHANGE MODE");
 
     // Mute
     ctx.fillStyle = "#222";
@@ -136,16 +143,58 @@ export class GameOverScene implements GameScene {
     }
 
     // Play Again
-    if (this.inRect(x, y, cx - 140, cy + 140, 280, 50)) {
+    if (this.inRect(x, y, cx - 140, cy + 190, 280, 50)) {
       this.engine.audio.sonarPing();
       this.engine.switchScene(SCENES.PLACEMENT);
     }
 
     // Change Mode
-    if (this.inRect(x, y, cx - 140, cy + 210, 280, 50)) {
+    if (this.inRect(x, y, cx - 140, cy + 260, 280, 50)) {
       this.engine.audio.sonarPing();
       this.engine.switchScene(SCENES.MODE);
     }
+  }
+
+  private renderShipSummary(ctx: CanvasRenderingContext2D, cx: number, y: number): void {
+    const fleet = this.engine.gameMode === "advanced" ? ADVANCED_FLEET : CLASSIC_FLEET;
+    const playerBoard = this.engine.playerBoard;
+    const enemyBoard = this.engine.enemyBoard;
+    if (!playerBoard || !enemyBoard) return;
+
+    const colW = 180;
+    const leftX = cx - colW - 10;
+    const rightX = cx + 10;
+
+    ctx.textAlign = "center";
+    ctx.font = `11px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("FLEET STATUS", cx, y);
+
+    // Column headers
+    ctx.font = `10px ${FONT}`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("YOUR FLEET", leftX, y + 18);
+    ctx.fillStyle = hex(C.HIT_RED);
+    ctx.fillText("ENEMY FLEET", rightX, y + 18);
+
+    fleet.forEach((cfg, i) => {
+      const rowY = y + 34 + i * 16;
+
+      // Player ship status
+      const pShip = playerBoard.ships.find((s) => s.config.id === cfg.id);
+      const pSunk = pShip ? isShipSunk(pShip) : false;
+      ctx.font = `10px ${FONT}`;
+      ctx.textAlign = "left";
+      ctx.fillStyle = pSunk ? hex(C.SUNK_OVERLAY) : hex(C.GREEN);
+      ctx.fillText(`${pSunk ? "✕" : "●"} ${cfg.name}`, leftX, rowY);
+
+      // Enemy ship status
+      const eShip = enemyBoard.ships.find((s) => s.config.id === cfg.id);
+      const eSunk = eShip ? isShipSunk(eShip) : false;
+      ctx.fillStyle = eSunk ? hex(C.SUNK_OVERLAY) : hex(C.HIT_RED);
+      ctx.fillText(`${eSunk ? "✕" : "●"} ${cfg.name}`, rightX, rowY);
+    });
   }
 
   private drawBtn(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, label: string): void {

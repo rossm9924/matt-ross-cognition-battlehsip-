@@ -177,7 +177,10 @@ export class PlacementScene implements GameScene {
 
     // Place selected ship
     const result = this.board.place(this.selected, cell.row, cell.col, this.orientation);
-    if (!result) return;
+    if (!result) {
+      this.msg = "Can't place there — overlap or out of bounds!";
+      return;
+    }
 
     this.remaining = this.remaining.filter((s) => s.id !== this.selected!.id);
     this.selected = null;

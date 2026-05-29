@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { createGame } from "@/game/setup";
 import { Engine } from "@/game/Engine";
 
-const MIN_WIDTH = 480;
-const MIN_HEIGHT = 360;
+const MIN_WIDTH = 600;
+const MIN_HEIGHT = 450;
 
 export default function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -45,18 +45,34 @@ export default function GameCanvas() {
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "#000",
+            background: "linear-gradient(180deg, #0a1e3c 0%, #1a4f82 100%)",
             color: "#33FF33",
             fontFamily: '"Black Ops One", sans-serif',
             textAlign: "center",
             padding: "2rem",
           }}
         >
-          <div style={{ fontSize: "24px", marginBottom: "16px" }}>⚓</div>
+          <div style={{ fontSize: "36px", marginBottom: "12px", letterSpacing: "4px" }}>
+            BATTLESHIP WAR
+          </div>
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              border: "2px solid #33FF33",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: "16px",
+            }}
+          >
+            <div style={{ fontSize: "28px", transform: "rotate(90deg)" }}>📱</div>
+          </div>
           <div style={{ fontSize: "18px", marginBottom: "8px" }}>
             VIEWPORT TOO SMALL
           </div>
-          <div style={{ fontSize: "13px", color: "#1A8A1A", maxWidth: "280px" }}>
+          <div style={{ fontSize: "13px", color: "#1A8A1A", maxWidth: "300px" }}>
             Please widen your browser window or rotate your device to landscape
             to play Battleship War.
           </div>

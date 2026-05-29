@@ -147,7 +147,10 @@ export class BattleScene implements GameScene {
   }
 
   private fireAt(row: number, col: number): void {
-    if (this.enemyBoard.isShot(row, col)) return;
+    if (this.enemyBoard.isShot(row, col)) {
+      this.status = `Already fired at ${ROW_LABELS[row]}${COL_LABELS[col]}!`;
+      return;
+    }
 
     this.phase = "animating";
     const result = this.enemyBoard.processShot(row, col);
@@ -186,6 +189,7 @@ export class BattleScene implements GameScene {
         this.engine.score = this.score;
         this.engine.playerWon = true;
         this.engine.gameEndTime = Date.now();
+        this.engine.enemyBoard = this.enemyBoard;
         this.engine.audio.victory();
         this.engine.switchScene(SCENES.GAMEOVER);
         return;
@@ -566,6 +570,7 @@ export class BattleScene implements GameScene {
         this.engine.score = this.score;
         this.engine.playerWon = false;
         this.engine.gameEndTime = Date.now();
+        this.engine.enemyBoard = this.enemyBoard;
         this.engine.audio.defeat();
         this.engine.switchScene(SCENES.GAMEOVER);
         return;
