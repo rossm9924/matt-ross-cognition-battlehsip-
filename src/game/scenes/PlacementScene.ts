@@ -22,6 +22,7 @@ export class PlacementScene implements GameScene {
   private my = 0;
   private msg = "Select a ship to place";
   private allPlaced = false;
+  private pickedOrigin: { row: number; col: number } | null = null;
 
   enter(engine: Engine): void {
     this.engine = engine;
@@ -31,6 +32,7 @@ export class PlacementScene implements GameScene {
     this.orientation = "horizontal";
     this.allPlaced = false;
     this.msg = "Select a ship to place";
+    this.pickedOrigin = null;
     this.board = new Board();
   }
 
@@ -82,6 +84,7 @@ export class PlacementScene implements GameScene {
       const iy = py + i * 44;
       if (x >= px && x <= px + 200 && y >= iy && y <= iy + 30) {
         this.selected = this.remaining[i];
+        this.pickedOrigin = null;
         this.msg = `Placing: ${this.selected.name} (${this.selected.length} cells) — R to rotate`;
         return;
       }
@@ -93,6 +96,7 @@ export class PlacementScene implements GameScene {
       this.board.placeRandom(this.fleet);
       this.remaining = [];
       this.selected = null;
+      this.pickedOrigin = null;
       this.allPlaced = true;
       this.msg = "Fleet shuffled! Press PLAY to begin.";
       return;
@@ -103,6 +107,7 @@ export class PlacementScene implements GameScene {
       this.board.clearAll();
       this.remaining = [...this.fleet];
       this.selected = null;
+      this.pickedOrigin = null;
       this.allPlaced = false;
       this.msg = "Grid cleared. Select a ship to place.";
       return;
@@ -129,25 +134,42 @@ export class PlacementScene implements GameScene {
     if (!cell) return;
 
     if (!this.selected) {
-      // Pick up existing ship
+      // Select existing ship in-place (don't remove yet)
       const ship = this.board.ships.find((s) =>
         s.cells.some((c) => c.row === cell.row && c.col === cell.col),
       );
       if (ship) {
+        const origin = ship.cells[0];
         this.board.remove(ship);
         this.remaining.push(ship.config);
         this.selected = ship.config;
         this.orientation = ship.orientation;
+        this.pickedOrigin = { row: origin.row, col: origin.col };
         this.allPlaced = false;
-        this.msg = `Picked up ${ship.config.name}. Click to re-place.`;
+        // Re-place at same spot so it stays visible
+        this.board.place(ship.config, origin.row, origin.col, ship.orientation);
+        this.msg = `Selected ${ship.config.name}. Rotate or click to re-place.`;
       }
       return;
     }
 
+    // Remove from old position if we're moving a picked-up ship
+    if (this.pickedOrigin) {
+      const oldShip = this.board.ships.find((s) => s.config.id === this.selected!.id);
+      if (oldShip) this.board.remove(oldShip);
+    }
+
     // Place selected ship
     const result = this.board.place(this.selected, cell.row, cell.col, this.orientation);
-    if (!result) return;
+    if (!result) {
+      // Re-place at origin if move failed
+      if (this.pickedOrigin) {
+        this.board.place(this.selected, this.pickedOrigin.row, this.pickedOrigin.col, this.orientation);
+      }
+      return;
+    }
 
+    this.pickedOrigin = null;
     this.remaining = this.remaining.filter((s) => s.id !== this.selected!.id);
     this.selected = null;
     if (this.remaining.length === 0) {
@@ -163,7 +185,28 @@ export class PlacementScene implements GameScene {
   }
 
   private toggleOrientation(): void {
-    this.orientation = this.orientation === "horizontal" ? "vertical" : "horizontal";
+    const newOri: Orientation = this.orientation === "horizontal" ? "vertical" : "horizontal";
+
+    // If a ship is selected and placed on the board, rotate it in-place
+    if (this.selected && this.pickedOrigin) {
+      const oldShip = this.board.ships.find((s) => s.config.id === this.selected!.id);
+      if (oldShip) {
+        this.board.remove(oldShip);
+        if (this.board.canPlace(this.selected, this.pickedOrigin.row, this.pickedOrigin.col, newOri)) {
+          this.board.place(this.selected, this.pickedOrigin.row, this.pickedOrigin.col, newOri);
+          this.orientation = newOri;
+        } else {
+          // Can't rotate here — put it back in old orientation
+          this.board.place(this.selected, this.pickedOrigin.row, this.pickedOrigin.col, this.orientation);
+          this.msg = `Can't rotate ${this.selected.name} here — not enough room.`;
+          return;
+        }
+      } else {
+        this.orientation = newOri;
+      }
+    } else {
+      this.orientation = newOri;
+    }
   }
 
   private cellAt(x: number, y: number): { row: number; col: number } | null {
