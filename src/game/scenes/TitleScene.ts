@@ -89,7 +89,7 @@ export class TitleScene implements GameScene {
         "BATTLESHIP WAR — RULES", "",
         "Place your fleet on the 14×14 grid.",
         "Take turns firing at the enemy grid.",
-        "Hit = red marker, Miss = green marker.",
+        "Hit = red marker, Miss = white dot.",
         "Sink all enemy ships to win!", "",
         "Click anywhere to close.",
       ];

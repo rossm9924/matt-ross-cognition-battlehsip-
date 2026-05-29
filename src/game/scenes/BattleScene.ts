@@ -155,11 +155,6 @@ export class BattleScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
-    // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
-      this.engine.audio.toggleMute();
-      return;
-    }
     if (this.phase !== "player_turn" || this.viewMode !== "radar") return;
 
     const cell = this.radarCell(x, y);
@@ -187,19 +182,38 @@ export class BattleScene implements GameScene {
     if (this.score > hs) localStorage.setItem("battleshipWarHighScore", String(this.score));
 
     this.engine.audio.shoot();
-    this.startFade("iso", () => {
-      this.fireShell(false, cell.row, cell.col, result, () => {
-        if (this.enemyBoard.allSunk()) {
-          this.engine.score = this.score;
-          this.engine.playerWon = true;
-          this.engine.audio.victory();
-          this.engine.switchScene(SCENES.GAMEOVER);
-          return;
-        }
-        this.phase = "enemy_turn";
-        setTimeout(() => this.doEnemyTurn(), 800 + Math.random() * 300);
+
+    if (this.engine.fastMode) {
+      // Fast mode: inline flash, no cinematic
+      if (result.hit) {
+        this.engine.audio.explosion();
+      } else {
+        this.engine.audio.splash();
+      }
+      if (this.enemyBoard.allSunk()) {
+        this.engine.score = this.score;
+        this.engine.playerWon = true;
+        this.engine.audio.victory();
+        this.engine.switchScene(SCENES.GAMEOVER);
+        return;
+      }
+      this.phase = "enemy_turn";
+      setTimeout(() => this.doEnemyTurn(), 300);
+    } else {
+      this.startFade("iso", () => {
+        this.fireShell(false, cell.row, cell.col, result, () => {
+          if (this.enemyBoard.allSunk()) {
+            this.engine.score = this.score;
+            this.engine.playerWon = true;
+            this.engine.audio.victory();
+            this.engine.switchScene(SCENES.GAMEOVER);
+            return;
+          }
+          this.phase = "enemy_turn";
+          setTimeout(() => this.doEnemyTurn(), 800 + Math.random() * 300);
+        });
       });
-    });
+    }
   }
 
   /* ============ RADAR VIEW ============ */
@@ -269,8 +283,10 @@ export class BattleScene implements GameScene {
           ctx.lineWidth = 1;
           ctx.strokeRect(RGX + c * CELL + 2, RGY + r * CELL + 2, CELL - 4, CELL - 4);
         } else if (st === "miss") {
-          ctx.fillStyle = `rgba(34,102,34,0.5)`;
-          ctx.fillRect(RGX + c * CELL + 4, RGY + r * CELL + 4, CELL - 8, CELL - 8);
+          ctx.fillStyle = `rgba(255,255,255,0.7)`;
+          ctx.beginPath();
+          ctx.arc(RGX + c * CELL + CELL / 2, RGY + r * CELL + CELL / 2, 4, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     }
@@ -313,6 +329,9 @@ export class BattleScene implements GameScene {
 
     // Fleet panels
     this.drawFleetPanels(ctx);
+
+    // Player mini-map
+    this.drawMiniMap(ctx);
   }
 
   /* ============ ISOMETRIC VIEW ============ */
@@ -463,13 +482,6 @@ export class BattleScene implements GameScene {
       const dots = ".".repeat(Math.floor(Date.now() / 500) % 4);
       ctx.fillText(`AI THINKING${dots}`, CANVAS_W / 2, CANVAS_H / 2);
     }
-
-    // Mute icon
-    ctx.fillStyle = "#222";
-    ctx.fillRect(CANVAS_W - 56, 6, 32, 28);
-    ctx.font = "20px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(this.engine.audio.muted ? "\uD83D\uDD07" : "\uD83D\uDD0A", CANVAS_W - 40, 20);
 
     // Status text (iso view)
     if (this.viewMode === "iso") {
@@ -649,7 +661,13 @@ export class BattleScene implements GameScene {
     }
 
     this.engine.audio.shoot();
-    this.fireShell(true, coord.row, coord.col, result, () => {
+
+    if (this.engine.fastMode) {
+      if (result.hit) {
+        this.engine.audio.explosion();
+      } else {
+        this.engine.audio.splash();
+      }
       if (this.playerBoard.allSunk()) {
         this.engine.score = this.score;
         this.engine.playerWon = false;
@@ -657,12 +675,78 @@ export class BattleScene implements GameScene {
         this.engine.switchScene(SCENES.GAMEOVER);
         return;
       }
-      // Fade back to radar
-      this.startFade("radar", () => {
-        this.phase = "player_turn";
-        this.status = "YOUR TURN — Click enemy grid to fire";
+      this.phase = "player_turn";
+      this.status = "YOUR TURN — Click enemy grid to fire";
+    } else {
+      this.fireShell(true, coord.row, coord.col, result, () => {
+        if (this.playerBoard.allSunk()) {
+          this.engine.score = this.score;
+          this.engine.playerWon = false;
+          this.engine.audio.defeat();
+          this.engine.switchScene(SCENES.GAMEOVER);
+          return;
+        }
+        // Fade back to radar
+        this.startFade("radar", () => {
+          this.phase = "player_turn";
+          this.status = "YOUR TURN — Click enemy grid to fire";
+        });
       });
-    });
+    }
+  }
+
+  /* ============ MINI-MAP ============ */
+
+  private drawMiniMap(ctx: CanvasRenderingContext2D): void {
+    const MC = 12; // mini-map cell size
+    const MX = CANVAS_W - GRID_SIZE * MC - 30;
+    const MY = CANVAS_H - GRID_SIZE * MC - 60;
+
+    // Background
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(MX - 4, MY - 22, GRID_SIZE * MC + 8, GRID_SIZE * MC + 26);
+
+    // Label
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `10px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("YOUR WATERS", MX + (GRID_SIZE * MC) / 2, MY - 10);
+
+    // Grid lines
+    ctx.strokeStyle = `rgba(26,138,26,0.3)`;
+    ctx.lineWidth = 0.5;
+    for (let r = 0; r <= GRID_SIZE; r++) {
+      ctx.beginPath();
+      ctx.moveTo(MX, MY + r * MC);
+      ctx.lineTo(MX + GRID_SIZE * MC, MY + r * MC);
+      ctx.stroke();
+    }
+    for (let c = 0; c <= GRID_SIZE; c++) {
+      ctx.beginPath();
+      ctx.moveTo(MX + c * MC, MY);
+      ctx.lineTo(MX + c * MC, MY + GRID_SIZE * MC);
+      ctx.stroke();
+    }
+
+    // Ships + markers
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const st = this.playerBoard.grid[r][c];
+        if (st === "hit") {
+          ctx.fillStyle = `rgba(255,42,42,0.9)`;
+          ctx.fillRect(MX + c * MC + 1, MY + r * MC + 1, MC - 2, MC - 2);
+        } else if (st === "miss") {
+          ctx.fillStyle = `rgba(255,255,255,0.5)`;
+          ctx.beginPath();
+          ctx.arc(MX + c * MC + MC / 2, MY + r * MC + MC / 2, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (st === "ship") {
+          ctx.fillStyle = `rgba(51,255,51,0.3)`;
+          ctx.fillRect(MX + c * MC + 1, MY + r * MC + 1, MC - 2, MC - 2);
+        }
+      }
+    }
   }
 
   /* ============ HELPERS ============ */

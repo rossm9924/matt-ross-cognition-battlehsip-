@@ -32,13 +32,6 @@ export class ModeSelectScene implements GameScene {
     } else {
       this.renderAIModeSelect(ctx, cx);
     }
-
-    // Mute icon
-    ctx.fillStyle = "#222";
-    ctx.fillRect(W - 56, 16, 32, 28);
-    ctx.font = "20px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(this.engine.audio.muted ? "\uD83D\uDD07" : "\uD83D\uDD0A", W - 40, 30);
   }
 
   onMouseMove(x: number, y: number): void {
@@ -47,11 +40,6 @@ export class ModeSelectScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
-    // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
-      this.engine.audio.toggleMute();
-      return;
-    }
 
     const cx = CANVAS_W / 2;
 
