@@ -79,6 +79,16 @@ export class TitleScene implements GameScene {
     }
     this.drawMuteIcon(ctx, W - 40, 30);
 
+    // Mute tooltip
+    if (this.mx > W - 60 && this.my < 50) {
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(W - 90, 46, 60, 20);
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.font = `12px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.fillText("SOUND", W - 60, 56);
+    }
+
     // Info overlay
     if (this.showInfo) {
       ctx.fillStyle = "rgba(0,0,0,0.88)";
@@ -87,13 +97,15 @@ export class TitleScene implements GameScene {
       ctx.font = `18px ${FONT}`;
       const lines = [
         "BATTLESHIP WAR — RULES", "",
-        "Place your fleet on the 14×14 grid.",
+        "Place your fleet on the 10×10 grid.",
         "Take turns firing at the enemy grid.",
         "Hit = red marker, Miss = white dot.",
         "Sink all enemy ships to win!", "",
+        "Use arrow keys + Enter to fire.",
+        "R to rotate ships during placement.", "",
         "Click anywhere to close.",
       ];
-      lines.forEach((l, i) => ctx.fillText(l, cx, cy - 100 + i * 30));
+      lines.forEach((l, i) => ctx.fillText(l, cx, cy - 120 + i * 28));
     }
   }
 
