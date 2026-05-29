@@ -2,6 +2,7 @@ export type CellState = "empty" | "ship" | "hit" | "miss";
 export type Orientation = "horizontal" | "vertical";
 export type GameMode = "classic" | "advanced";
 export type AIMode = "fast" | "llm";
+export type Difficulty = "easy" | "normal" | "hard";
 
 export interface Coord {
   row: number;

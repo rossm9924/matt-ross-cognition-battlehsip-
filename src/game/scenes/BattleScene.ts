@@ -4,38 +4,32 @@ import {
   CLASSIC_FLEET, ADVANCED_FLEET,
   SCORE_HIT, SCORE_SINK, ShipConfig,
 } from "../config";
-import { Board, isShipSunk, ShotResult } from "../Board";
+import { Board, isShipSunk } from "../Board";
 import { BattleshipAI } from "../AI";
 import { LLMAI } from "../LLMAI";
 import { Engine, GameScene } from "../Engine";
 
 type Phase = "player_turn" | "animating" | "enemy_turn" | "enemy_anim";
 
-const CELL = 32;
-const RGX = 120; // radar grid X
-const RGY = 110; // radar grid Y
+// Dual-grid layout: player grid left, enemy grid right
+const CELL = 28;
+const GRID_PX = GRID_SIZE * CELL; // 280px for 10×10
 
-const ISO_TW = 36;
-const ISO_TH = 18;
-const ISO_E_OX = 320;
-const ISO_E_OY = 140;
-const ISO_P_OX = 740;
-const ISO_P_OY = 340;
+const P_GX = 40;  // player grid X
+const P_GY = 80;  // player grid Y
+const E_GX = 460;  // enemy grid X
+const E_GY = 80;  // enemy grid Y
 
-interface ShellAnim {
-  fromX: number; fromY: number;
-  toX: number; toY: number;
-  midX: number; midY: number;
-  t: number;
-  duration: number;
-  result: ShotResult;
-  onDone: () => void;
+interface LogEntry {
+  text: string;
+  color: string;
+  time: number;
 }
 
-interface FxParticle {
-  x: number; y: number;
-  r: number; color: string;
-  life: number; maxLife: number;
+interface SunkBanner {
+  text: string;
+  alpha: number;
+  y: number;
 }
 
 export class BattleScene implements GameScene {
@@ -47,16 +41,18 @@ export class BattleScene implements GameScene {
   private score = 0;
   private mx = 0;
   private my = 0;
-  private status = "YOUR TURN — Click enemy grid to fire";
-  private viewMode: "radar" | "iso" = "radar";
-  private fadeAlpha = 1;
-  private fadingTo: "radar" | "iso" | null = null;
-  private shell: ShellAnim | null = null;
-  private particles: FxParticle[] = [];
+  private status = "YOUR TURN \u2014 Click enemy grid to fire";
   private sweepX = 0;
   private fleet!: ShipConfig[];
+  private log: LogEntry[] = [];
+  private sunkBanner: SunkBanner | null = null;
   private llmLoading = false;
   private llmSwitchedToFast = false;
+
+  // Keyboard cursor
+  private cursorRow = 0;
+  private cursorCol = 0;
+  private cursorActive = false;
 
   enter(engine: Engine): void {
     this.engine = engine;
@@ -68,224 +64,313 @@ export class BattleScene implements GameScene {
     if (engine.aiMode === "llm" && engine.costTracker) {
       this.ai = new LLMAI("/api/anthropic", engine.costTracker, minLen);
     } else {
-      this.ai = new BattleshipAI(minLen);
+      this.ai = new BattleshipAI(minLen, engine.difficulty);
     }
     this.score = 0;
     this.llmLoading = false;
     this.llmSwitchedToFast = false;
     this.phase = "player_turn";
-    this.viewMode = "radar";
-    this.fadeAlpha = 1;
-    this.fadingTo = null;
-    this.shell = null;
-    this.particles = [];
-    this.status = "YOUR TURN — Click enemy grid to fire";
+    this.log = [];
+    this.sunkBanner = null;
+    this.cursorRow = 0;
+    this.cursorCol = 0;
+    this.cursorActive = false;
+    this.status = "YOUR TURN \u2014 Click enemy grid to fire";
+    engine.resetStats();
   }
 
   update(dt: number): void {
-    this.sweepX = (this.sweepX + 120 * dt) % (GRID_SIZE * CELL);
+    this.sweepX = (this.sweepX + 120 * dt) % GRID_PX;
 
-    // Fade transition
-    if (this.fadingTo) {
-      this.fadeAlpha -= dt * 4;
-      if (this.fadeAlpha <= 0) {
-        this.viewMode = this.fadingTo;
-        this.fadingTo = null;
-        this.fadeAlpha = 0;
-        // Fade in
-        this.fadingTo = null;
-      }
-    } else if (this.fadeAlpha < 1) {
-      this.fadeAlpha = Math.min(1, this.fadeAlpha + dt * 4);
+    // Fade sunk banner
+    if (this.sunkBanner) {
+      this.sunkBanner.alpha -= dt * 0.5;
+      this.sunkBanner.y -= dt * 15;
+      if (this.sunkBanner.alpha <= 0) this.sunkBanner = null;
     }
-
-    // Shell animation
-    if (this.shell) {
-      this.shell.t += dt / this.shell.duration;
-      if (this.shell.t >= 1) {
-        this.shell.t = 1;
-        const done = this.shell.onDone;
-        const res = this.shell.result;
-        this.shell = null;
-        // Spawn particles
-        if (res.hit) {
-          this.engine.audio.explosion();
-          this.spawnExplosion(
-            this.isoX(res.coord.row, res.coord.col, this.phase === "enemy_anim"),
-            this.isoY(res.coord.row, res.coord.col, this.phase === "enemy_anim"),
-          );
-        } else {
-          this.engine.audio.splash();
-          this.spawnSplash(
-            this.isoX(res.coord.row, res.coord.col, this.phase === "enemy_anim"),
-            this.isoY(res.coord.row, res.coord.col, this.phase === "enemy_anim"),
-          );
-        }
-        setTimeout(done, 1000);
-      }
-    }
-
-    // Particles
-    this.particles = this.particles.filter((p) => {
-      p.life -= dt;
-      p.r += dt * 20;
-      return p.life > 0;
-    });
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    ctx.save();
-    ctx.globalAlpha = this.fadeAlpha;
+    // Full CRT/radar background
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-    if (this.viewMode === "radar") {
-      this.renderRadar(ctx);
-    } else {
-      this.renderIso(ctx);
-    }
-
-    ctx.restore();
-
-    // UI always visible
+    this.renderTopBar(ctx);
+    this.renderPlayerGrid(ctx);
+    this.renderEnemyGrid(ctx);
+    this.renderFleetPanels(ctx);
+    this.renderBattleLog(ctx);
     this.renderHUD(ctx);
+    this.renderSunkBanner(ctx);
   }
 
   onMouseMove(x: number, y: number): void {
     this.mx = x;
     this.my = y;
+    this.cursorActive = false;
   }
 
   onMouseDown(x: number, y: number): void {
-    if (this.phase !== "player_turn" || this.viewMode !== "radar") return;
+    // Mute
+    if (x > CANVAS_W - 70 && y < 50) {
+      this.engine.audio.toggleMute();
+      return;
+    }
+    // Quit to title
+    if (x >= CANVAS_W / 2 - 40 && x <= CANVAS_W / 2 + 40 && y >= 4 && y <= 28) {
+      this.engine.switchScene(SCENES.TITLE);
+      return;
+    }
+    // Help icon
+    if (x < 60 && y < 50) return;
 
-    const cell = this.radarCell(x, y);
+    if (this.phase !== "player_turn") return;
+
+    const cell = this.enemyCell(x, y);
     if (!cell) return;
-    if (this.enemyBoard.isShot(cell.row, cell.col)) return;
+    this.fireAt(cell.row, cell.col);
+  }
+
+  onKeyDown(key: string): void {
+    if (this.phase !== "player_turn") return;
+
+    this.cursorActive = true;
+    switch (key) {
+      case "ArrowUp":
+        this.cursorRow = Math.max(0, this.cursorRow - 1);
+        break;
+      case "ArrowDown":
+        this.cursorRow = Math.min(GRID_SIZE - 1, this.cursorRow + 1);
+        break;
+      case "ArrowLeft":
+        this.cursorCol = Math.max(0, this.cursorCol - 1);
+        break;
+      case "ArrowRight":
+        this.cursorCol = Math.min(GRID_SIZE - 1, this.cursorCol + 1);
+        break;
+      case "Enter":
+      case " ":
+        this.fireAt(this.cursorRow, this.cursorCol);
+        break;
+    }
+  }
+
+  private fireAt(row: number, col: number): void {
+    if (this.enemyBoard.isShot(row, col)) return;
 
     this.phase = "animating";
-    const result = this.enemyBoard.processShot(cell.row, cell.col);
+    const result = this.enemyBoard.processShot(row, col);
+    this.engine.shotsFired++;
 
     if (result.hit) {
       this.score += SCORE_HIT;
+      this.engine.shotsHit++;
       if (result.sunkShip) {
         this.score += SCORE_SINK;
         this.engine.audio.sinkGroan();
         this.status = `You sank the ${result.sunkShip.config.name}!`;
+        this.addLog(`SUNK: ${result.sunkShip.config.name}!`, hex(C.FLAME));
+        this.sunkBanner = {
+          text: `${result.sunkShip.config.name.toUpperCase()} DESTROYED`,
+          alpha: 1.5,
+          y: CANVAS_H / 2 - 20,
+        };
       } else {
-        this.status = `HIT at ${ROW_LABELS[cell.row]}${COL_LABELS[cell.col]}!`;
+        this.status = `HIT at ${ROW_LABELS[row]}${COL_LABELS[col]}!`;
+        this.addLog(`HIT at ${ROW_LABELS[row]}${COL_LABELS[col]}`, hex(C.HIT_RED));
       }
+      this.engine.audio.explosion();
     } else {
-      this.status = `Miss at ${ROW_LABELS[cell.row]}${COL_LABELS[cell.col]}.`;
+      this.status = `Miss at ${ROW_LABELS[row]}${COL_LABELS[col]}.`;
+      this.addLog(`Miss at ${ROW_LABELS[row]}${COL_LABELS[col]}`, hex(C.MISS_WHITE));
+      this.engine.audio.splash();
     }
 
-    // Save high score
     const hs = parseInt(localStorage.getItem("battleshipWarHighScore") ?? "0", 10);
     if (this.score > hs) localStorage.setItem("battleshipWarHighScore", String(this.score));
 
-    this.engine.audio.shoot();
-
-    if (this.engine.fastMode) {
-      // Fast mode: inline flash, no cinematic
-      if (result.hit) {
-        this.engine.audio.explosion();
-      } else {
-        this.engine.audio.splash();
-      }
+    // No cinematic — inline feedback, fast pace
+    setTimeout(() => {
       if (this.enemyBoard.allSunk()) {
         this.engine.score = this.score;
         this.engine.playerWon = true;
+        this.engine.gameEndTime = Date.now();
         this.engine.audio.victory();
         this.engine.switchScene(SCENES.GAMEOVER);
         return;
       }
       this.phase = "enemy_turn";
-      setTimeout(() => this.doEnemyTurn(), 300);
-    } else {
-      this.startFade("iso", () => {
-        this.fireShell(false, cell.row, cell.col, result, () => {
-          if (this.enemyBoard.allSunk()) {
-            this.engine.score = this.score;
-            this.engine.playerWon = true;
-            this.engine.audio.victory();
-            this.engine.switchScene(SCENES.GAMEOVER);
-            return;
-          }
-          this.phase = "enemy_turn";
-          setTimeout(() => this.doEnemyTurn(), 800 + Math.random() * 300);
-        });
-      });
-    }
+      setTimeout(() => this.doEnemyTurn(), 400 + Math.random() * 200);
+    }, 300);
   }
 
-  /* ============ RADAR VIEW ============ */
+  /* ============ RENDER SECTIONS ============ */
 
-  private renderRadar(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  private renderTopBar(ctx: CanvasRenderingContext2D): void {
+    ctx.fillStyle = "rgba(17,17,17,0.9)";
+    ctx.fillRect(0, 0, CANVAS_W, 32);
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `26px ${FONT}`;
+    ctx.font = `18px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("BATTLE STATION", CANVAS_W / 2, 20);
+    ctx.fillText("BATTLE STATION", CANVAS_W / 2, 16);
 
+    // Help
+    ctx.font = `14px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("?", 20, 16);
+
+    // Quit
+    ctx.font = `10px ${FONT}`;
+    const qHover = this.mx >= CANVAS_W / 2 - 40 && this.mx <= CANVAS_W / 2 + 40 &&
+                   this.my >= 4 && this.my <= 28;
+    ctx.fillStyle = qHover ? hex(C.GREEN) : "transparent";
+
+    // Mute
+    ctx.font = "16px sans-serif";
+    ctx.fillText(this.engine.audio.muted ? "\uD83D\uDD07" : "\uD83D\uDD0A", CANVAS_W - 30, 16);
+
+    // Mute label on hover
+    if (this.mx > CANVAS_W - 60 && this.my < 32) {
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(CANVAS_W - 90, 34, 60, 20);
+      ctx.fillStyle = hex(C.GREEN);
+      ctx.font = `10px ${FONT}`;
+      ctx.fillText("SOUND", CANVAS_W - 60, 44);
+    }
+  }
+
+  private renderPlayerGrid(ctx: CanvasRenderingContext2D): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Title
     ctx.font = `13px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(this.status, CANVAS_W / 2, 52);
+    ctx.fillText("YOUR WATERS", P_GX + GRID_PX / 2, P_GY - 20);
 
     // Grid border
-    ctx.strokeStyle = hex(C.GREEN);
+    ctx.strokeStyle = hex(C.DIM_GREEN);
     ctx.lineWidth = 2;
-    ctx.strokeRect(RGX - 2, RGY - 2, GRID_SIZE * CELL + 4, GRID_SIZE * CELL + 4);
+    ctx.strokeRect(P_GX - 1, P_GY - 1, GRID_PX + 2, GRID_PX + 2);
 
     // Grid lines
-    ctx.strokeStyle = `rgba(26,138,26,0.4)`;
+    ctx.strokeStyle = "rgba(26,138,26,0.3)";
     ctx.lineWidth = 1;
-    for (let r = 0; r <= GRID_SIZE; r++) {
+    for (let i = 0; i <= GRID_SIZE; i++) {
       ctx.beginPath();
-      ctx.moveTo(RGX, RGY + r * CELL);
-      ctx.lineTo(RGX + GRID_SIZE * CELL, RGY + r * CELL);
+      ctx.moveTo(P_GX, P_GY + i * CELL);
+      ctx.lineTo(P_GX + GRID_PX, P_GY + i * CELL);
       ctx.stroke();
-    }
-    for (let c = 0; c <= GRID_SIZE; c++) {
       ctx.beginPath();
-      ctx.moveTo(RGX + c * CELL, RGY);
-      ctx.lineTo(RGX + c * CELL, RGY + GRID_SIZE * CELL);
+      ctx.moveTo(P_GX + i * CELL, P_GY);
+      ctx.lineTo(P_GX + i * CELL, P_GY + GRID_PX);
       ctx.stroke();
     }
 
     // Labels
-    ctx.font = `11px ${FONT}`;
-    ctx.fillStyle = hex(C.GREEN);
+    ctx.font = `10px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
     for (let r = 0; r < GRID_SIZE; r++) {
-      ctx.fillText(ROW_LABELS[r], RGX - 18, RGY + r * CELL + CELL / 2);
+      ctx.fillText(ROW_LABELS[r], P_GX - 14, P_GY + r * CELL + CELL / 2);
     }
     for (let c = 0; c < GRID_SIZE; c++) {
-      ctx.fillText(COL_LABELS[c], RGX + c * CELL + CELL / 2, RGY + GRID_SIZE * CELL + 14);
+      ctx.fillText(COL_LABELS[c], P_GX + c * CELL + CELL / 2, P_GY + GRID_PX + 12);
+    }
+
+    // Ships (player's own ships visible)
+    for (const ship of this.playerBoard.ships) {
+      const sunk = isShipSunk(ship);
+      for (const cell of ship.cells) {
+        const st = this.playerBoard.grid[cell.row][cell.col];
+        if (st === "hit") continue; // drawn as hit marker below
+        ctx.fillStyle = sunk ? "rgba(102,17,17,0.6)" : "rgba(51,255,51,0.35)";
+        ctx.fillRect(P_GX + cell.col * CELL + 1, P_GY + cell.row * CELL + 1, CELL - 2, CELL - 2);
+      }
+    }
+
+    // Hit/miss markers from AI shots
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const st = this.playerBoard.grid[r][c];
+        if (st === "hit") {
+          ctx.fillStyle = "rgba(255,42,42,0.9)";
+          ctx.fillRect(P_GX + c * CELL + 2, P_GY + r * CELL + 2, CELL - 4, CELL - 4);
+          ctx.strokeStyle = "#ff6600";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(P_GX + c * CELL + 2, P_GY + r * CELL + 2, CELL - 4, CELL - 4);
+        } else if (st === "miss") {
+          ctx.fillStyle = "rgba(200,200,200,0.7)";
+          ctx.beginPath();
+          ctx.arc(P_GX + c * CELL + CELL / 2, P_GY + r * CELL + CELL / 2, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  private renderEnemyGrid(ctx: CanvasRenderingContext2D): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Title
+    ctx.font = `13px ${FONT}`;
+    ctx.fillStyle = hex(C.HIT_RED);
+    ctx.fillText("ENEMY WATERS", E_GX + GRID_PX / 2, E_GY - 20);
+
+    // Grid border
+    ctx.strokeStyle = hex(C.GREEN);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(E_GX - 1, E_GY - 1, GRID_PX + 2, GRID_PX + 2);
+
+    // Grid lines
+    ctx.strokeStyle = "rgba(26,138,26,0.4)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+      ctx.beginPath();
+      ctx.moveTo(E_GX, E_GY + i * CELL);
+      ctx.lineTo(E_GX + GRID_PX, E_GY + i * CELL);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(E_GX + i * CELL, E_GY);
+      ctx.lineTo(E_GX + i * CELL, E_GY + GRID_PX);
+      ctx.stroke();
     }
 
     // Sweep line
-    ctx.strokeStyle = `rgba(51,255,51,0.15)`;
+    ctx.strokeStyle = "rgba(51,255,51,0.15)";
     ctx.lineWidth = 1;
-    const sx = RGX + this.sweepX;
+    const sx = E_GX + this.sweepX;
     ctx.beginPath();
-    ctx.moveTo(sx, RGY);
-    ctx.lineTo(sx, RGY + GRID_SIZE * CELL);
+    ctx.moveTo(sx, E_GY);
+    ctx.lineTo(sx, E_GY + GRID_PX);
     ctx.stroke();
+
+    // Labels
+    ctx.font = `10px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    for (let r = 0; r < GRID_SIZE; r++) {
+      ctx.fillText(ROW_LABELS[r], E_GX - 14, E_GY + r * CELL + CELL / 2);
+    }
+    for (let c = 0; c < GRID_SIZE; c++) {
+      ctx.fillText(COL_LABELS[c], E_GX + c * CELL + CELL / 2, E_GY + GRID_PX + 12);
+    }
 
     // Markers
     for (let r = 0; r < GRID_SIZE; r++) {
       for (let c = 0; c < GRID_SIZE; c++) {
         const st = this.enemyBoard.grid[r][c];
         if (st === "hit") {
-          ctx.fillStyle = `rgba(255,42,42,1.0)`;
-          ctx.fillRect(RGX + c * CELL + 2, RGY + r * CELL + 2, CELL - 4, CELL - 4);
+          ctx.fillStyle = "rgba(255,42,42,1.0)";
+          ctx.fillRect(E_GX + c * CELL + 2, E_GY + r * CELL + 2, CELL - 4, CELL - 4);
           ctx.strokeStyle = "#ff6600";
           ctx.lineWidth = 1;
-          ctx.strokeRect(RGX + c * CELL + 2, RGY + r * CELL + 2, CELL - 4, CELL - 4);
+          ctx.strokeRect(E_GX + c * CELL + 2, E_GY + r * CELL + 2, CELL - 4, CELL - 4);
         } else if (st === "miss") {
-          ctx.fillStyle = `rgba(255,255,255,0.7)`;
+          ctx.fillStyle = "rgba(200,200,200,0.7)";
           ctx.beginPath();
-          ctx.arc(RGX + c * CELL + CELL / 2, RGY + r * CELL + CELL / 2, 4, 0, Math.PI * 2);
+          ctx.arc(E_GX + c * CELL + CELL / 2, E_GY + r * CELL + CELL / 2, 4, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -297,166 +382,123 @@ export class BattleScene implements GameScene {
         ctx.strokeStyle = hex(C.HIT_RED);
         ctx.lineWidth = 2;
         for (const cell of ship.cells) {
-          ctx.strokeRect(RGX + cell.col * CELL + 1, RGY + cell.row * CELL + 1, CELL - 2, CELL - 2);
+          ctx.strokeRect(E_GX + cell.col * CELL + 1, E_GY + cell.row * CELL + 1, CELL - 2, CELL - 2);
         }
       }
     }
 
-    // Crosshair
+    // Crosshair (mouse or keyboard)
     if (this.phase === "player_turn") {
-      const cell = this.radarCell(this.mx, this.my);
-      if (cell) {
-        const cx = RGX + cell.col * CELL + CELL / 2;
-        const cy = RGY + cell.row * CELL + CELL / 2;
-        ctx.strokeStyle = `rgba(51,255,51,0.3)`;
+      let hoverCell: { row: number; col: number } | null = null;
+      if (this.cursorActive) {
+        hoverCell = { row: this.cursorRow, col: this.cursorCol };
+      } else {
+        hoverCell = this.enemyCell(this.mx, this.my);
+      }
+      if (hoverCell) {
+        const cx = E_GX + hoverCell.col * CELL + CELL / 2;
+        const cy = E_GY + hoverCell.row * CELL + CELL / 2;
+        ctx.strokeStyle = "rgba(51,255,51,0.4)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(RGX, cy);
-        ctx.lineTo(RGX + GRID_SIZE * CELL, cy);
-        ctx.moveTo(cx, RGY);
-        ctx.lineTo(cx, RGY + GRID_SIZE * CELL);
+        ctx.moveTo(E_GX, cy);
+        ctx.lineTo(E_GX + GRID_PX, cy);
+        ctx.moveTo(cx, E_GY);
+        ctx.lineTo(cx, E_GY + GRID_PX);
         ctx.stroke();
+
+        // Keyboard cursor box
+        if (this.cursorActive) {
+          ctx.strokeStyle = hex(C.GREEN);
+          ctx.lineWidth = 2;
+          ctx.strokeRect(E_GX + hoverCell.col * CELL + 1, E_GY + hoverCell.row * CELL + 1, CELL - 2, CELL - 2);
+        }
 
         // Tooltip
         ctx.fillStyle = "#333";
-        ctx.fillRect(this.mx + 10, this.my - 22, 40, 18);
+        const tx = this.cursorActive ? E_GX + hoverCell.col * CELL + CELL + 4 : this.mx + 10;
+        const ty = this.cursorActive ? E_GY + hoverCell.row * CELL - 4 : this.my - 22;
+        ctx.fillRect(tx, ty, 36, 16);
         ctx.fillStyle = "#fff";
-        ctx.font = `11px ${FONT}`;
+        ctx.font = `10px ${FONT}`;
         ctx.textAlign = "left";
-        ctx.fillText(`${ROW_LABELS[cell.row]}${COL_LABELS[cell.col]}`, this.mx + 14, this.my - 13);
+        ctx.fillText(`${ROW_LABELS[hoverCell.row]}${COL_LABELS[hoverCell.col]}`, tx + 4, ty + 9);
       }
     }
-
-    // Fleet panels
-    this.drawFleetPanels(ctx);
-
-    // Player mini-map
-    this.drawMiniMap(ctx);
   }
 
-  /* ============ ISOMETRIC VIEW ============ */
-
-  private renderIso(ctx: CanvasRenderingContext2D): void {
-    // Ocean gradient
-    const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
-    grad.addColorStop(0, "#142e4a");
-    grad.addColorStop(1, "#2a6fb2");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-    // Enemy grid (upper-left)
-    this.drawIsoGrid(ctx, ISO_E_OX, ISO_E_OY, this.enemyBoard, false);
-    // Player grid (lower-right)
-    this.drawIsoGrid(ctx, ISO_P_OX, ISO_P_OY, this.playerBoard, true);
-
-    // Grid labels
-    ctx.font = `11px ${FONT}`;
-    ctx.fillStyle = hex(C.GREEN);
-    ctx.textAlign = "center";
-    ctx.fillText("ENEMY WATERS", ISO_E_OX, ISO_E_OY - 20);
-    ctx.fillText("YOUR WATERS", ISO_P_OX, ISO_P_OY - 20);
-
-    // Shell
-    if (this.shell) {
-      const t = this.shell.t;
-      const sx = (1 - t) * (1 - t) * this.shell.fromX + 2 * (1 - t) * t * this.shell.midX + t * t * this.shell.toX;
-      const sy = (1 - t) * (1 - t) * this.shell.fromY + 2 * (1 - t) * t * this.shell.midY + t * t * this.shell.toY;
-      ctx.fillStyle = hex(C.FLAME);
-      ctx.beginPath();
-      ctx.arc(sx, sy, 4, 0, Math.PI * 2);
-      ctx.fill();
-      // Trail
-      ctx.strokeStyle = `rgba(255,102,0,0.4)`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(this.shell.fromX, this.shell.fromY);
-      for (let i = 0; i <= 20; i++) {
-        const tt = (i / 20) * t;
-        const px = (1 - tt) * (1 - tt) * this.shell.fromX + 2 * (1 - tt) * tt * this.shell.midX + tt * tt * this.shell.toX;
-        const py = (1 - tt) * (1 - tt) * this.shell.fromY + 2 * (1 - tt) * tt * this.shell.midY + tt * tt * this.shell.toY;
-        ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-    }
-
-    // Particles
-    for (const p of this.particles) {
-      const alpha = p.life / p.maxLife;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-
-    // Side fleet panels
+  private renderFleetPanels(ctx: CanvasRenderingContext2D): void {
+    const fpX = E_GX + GRID_PX + 24;
     ctx.textAlign = "left";
-    ctx.font = `12px ${FONT}`;
-    ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("YOUR FLEET", 20, 100);
-    this.fleet.forEach((cfg, i) => {
-      const ship = this.playerBoard.ships.find((s) => s.config.id === cfg.id);
-      const sunk = ship ? isShipSunk(ship) : false;
-      ctx.fillStyle = sunk ? "#661111" : hex(C.GREEN);
-      ctx.fillText(`${sunk ? "✕" : "●"} ${cfg.name}`, 20, 120 + i * 18);
-    });
+    ctx.textBaseline = "middle";
 
+    // Enemy fleet
+    ctx.font = `12px ${FONT}`;
     ctx.fillStyle = hex(C.HIT_RED);
-    ctx.fillText("ENEMY FLEET", 20, 350);
+    ctx.fillText("ENEMY FLEET", fpX, E_GY);
     this.fleet.forEach((cfg, i) => {
       const ship = this.enemyBoard.ships.find((s) => s.config.id === cfg.id);
       const sunk = ship ? isShipSunk(ship) : false;
-      ctx.fillStyle = sunk ? "#661111" : hex(C.HIT_RED);
-      ctx.fillText(`${sunk ? "✕" : "●"} ${cfg.name}`, 20, 370 + i * 18);
+      const hitCount = ship ? ship.hits.size : 0;
+      const dots = Array.from({ length: cfg.length }, (_, di) =>
+        di < hitCount ? "\u2715" : "\u25CF",
+      ).join("");
+      ctx.fillStyle = sunk ? hex(C.SUNK_OVERLAY) : hex(C.HIT_RED);
+      ctx.font = `10px ${FONT}`;
+      ctx.fillText(`${cfg.name} ${dots}`, fpX, E_GY + 18 + i * 20);
     });
+
+    // Player fleet
+    const pfY = E_GY + this.fleet.length * 20 + 50;
+    ctx.font = `12px ${FONT}`;
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.fillText("YOUR FLEET", fpX, pfY);
+    this.fleet.forEach((cfg, i) => {
+      const ship = this.playerBoard.ships.find((s) => s.config.id === cfg.id);
+      const sunk = ship ? isShipSunk(ship) : false;
+      const hitCount = ship ? ship.hits.size : 0;
+      const dots = Array.from({ length: cfg.length }, (_, di) =>
+        di < hitCount ? "\u2715" : "\u25CF",
+      ).join("");
+      ctx.fillStyle = sunk ? hex(C.SUNK_OVERLAY) : hex(C.GREEN);
+      ctx.font = `10px ${FONT}`;
+      ctx.fillText(`${cfg.name} ${dots}`, fpX, pfY + 18 + i * 20);
+    });
+  }
+
+  private renderBattleLog(ctx: CanvasRenderingContext2D): void {
+    const logX = 40;
+    const logY = P_GY + GRID_PX + 35;
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = `11px ${FONT}`;
+    ctx.fillStyle = hex(C.DIM_GREEN);
+    ctx.fillText("BATTLE LOG", logX, logY);
+
+    const maxEntries = 8;
+    const entries = this.log.slice(-maxEntries);
+    entries.forEach((entry, i) => {
+      ctx.fillStyle = entry.color;
+      ctx.font = `10px ${FONT}`;
+      ctx.fillText(entry.text, logX, logY + 16 + i * 14);
+    });
+  }
+
+  private renderHUD(ctx: CanvasRenderingContext2D): void {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Status bar
+    ctx.fillStyle = "rgba(17,17,17,0.8)";
+    ctx.fillRect(P_GX, 36, GRID_PX * 2 + (E_GX - P_GX - GRID_PX) + GRID_PX, 26);
+    ctx.font = `12px ${FONT}`;
+    ctx.fillStyle = this.phase === "player_turn" ? hex(C.GREEN) : hex(C.DIM_GREEN);
+    ctx.fillText(this.status, (P_GX + E_GX + GRID_PX) / 2, 49);
 
     // Score
     ctx.textAlign = "right";
-    ctx.font = `16px ${FONT}`;
-    ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(`SCORE: ${this.score}`, CANVAS_W - 30, CANVAS_H - 20);
-  }
-
-  private drawIsoGrid(ctx: CanvasRenderingContext2D, ox: number, oy: number, board: Board, showShips: boolean): void {
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
-        const x = ox + (c - r) * (ISO_TW / 2);
-        const y = oy + (c + r) * (ISO_TH / 2);
-        const state = board.grid[r][c];
-
-        let fill = "#2a6fb2";
-        let alpha = 0.6;
-        if (state === "hit") { fill = "#ff2a2a"; alpha = 1.0; }
-        else if (state === "miss") { fill = "#ddeeff"; alpha = 0.4; }
-        else if (showShips && state === "ship") { fill = "#778899"; alpha = 0.7; }
-
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = fill;
-        ctx.beginPath();
-        ctx.moveTo(x, y - ISO_TH / 2);
-        ctx.lineTo(x + ISO_TW / 2, y);
-        ctx.lineTo(x, y + ISO_TH / 2);
-        ctx.lineTo(x - ISO_TW / 2, y);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.globalAlpha = 0.3;
-        ctx.strokeStyle = "#1a4f82";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-    }
-  }
-
-  /* ============ HUD ============ */
-
-  private renderHUD(ctx: CanvasRenderingContext2D): void {
-    // Score (always visible)
-    ctx.textAlign = "right";
-    ctx.textBaseline = "middle";
-    ctx.font = `16px ${FONT}`;
+    ctx.font = `14px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
     ctx.fillText(`SCORE: ${this.score}`, CANVAS_W - 30, CANVAS_H - 20);
 
@@ -483,125 +525,42 @@ export class BattleScene implements GameScene {
       ctx.fillText(`AI THINKING${dots}`, CANVAS_W / 2, CANVAS_H / 2);
     }
 
-    // Status text (iso view)
-    if (this.viewMode === "iso") {
-      ctx.textAlign = "center";
-      ctx.font = `14px ${FONT}`;
+    // Turn indicator
+    ctx.textAlign = "center";
+    ctx.font = `10px ${FONT}`;
+    if (this.phase === "player_turn") {
       ctx.fillStyle = hex(C.GREEN);
-      ctx.fillText(this.status, CANVAS_W / 2, 30);
+      ctx.fillText("\u25B6 YOUR TURN", E_GX + GRID_PX / 2, E_GY + GRID_PX + 28);
+    } else {
+      ctx.fillStyle = hex(C.DIM_GREEN);
+      ctx.fillText("\u23F3 OPPONENT'S TURN", E_GX + GRID_PX / 2, E_GY + GRID_PX + 28);
     }
+
+    // Keyboard hint
+    ctx.textAlign = "left";
+    ctx.font = `9px ${FONT}`;
+    ctx.fillStyle = hex(C.DARK_GREEN);
+    ctx.fillText("Arrow keys + Enter to fire", E_GX, CANVAS_H - 14);
   }
 
-  private drawFleetPanels(ctx: CanvasRenderingContext2D): void {
-    const epx = RGX + GRID_SIZE * CELL + 30;
-    ctx.textAlign = "left";
+  private renderSunkBanner(ctx: CanvasRenderingContext2D): void {
+    if (!this.sunkBanner) return;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, this.sunkBanner.alpha);
+    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    // Enemy fleet
-    ctx.font = `13px ${FONT}`;
-    ctx.fillStyle = hex(C.HIT_RED);
-    ctx.fillText("ENEMY FLEET", epx, RGY - 10);
-    this.fleet.forEach((cfg, i) => {
-      const ship = this.enemyBoard.ships.find((s) => s.config.id === cfg.id);
-      const sunk = ship ? isShipSunk(ship) : false;
-      const hitCount = ship ? ship.hits.size : 0;
-      const dots = Array.from({ length: cfg.length }, (_, di) =>
-        di < hitCount ? "✕" : "●",
-      ).join("");
-      ctx.fillStyle = sunk ? "#661111" : hex(C.HIT_RED);
-      ctx.font = `11px ${FONT}`;
-      ctx.fillText(`${cfg.name} ${dots}`, epx, RGY + 10 + i * 22);
-    });
+    // Banner background
+    ctx.fillStyle = "rgba(255,42,42,0.15)";
+    ctx.fillRect(0, this.sunkBanner.y - 20, CANVAS_W, 40);
 
-    // Player fleet
-    const ppx = RGX;
-    const ppy = RGY + GRID_SIZE * CELL + 35;
-    ctx.font = `13px ${FONT}`;
-    ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("YOUR FLEET", ppx, ppy);
-    this.fleet.forEach((cfg, i) => {
-      const ship = this.playerBoard.ships.find((s) => s.config.id === cfg.id);
-      const sunk = ship ? isShipSunk(ship) : false;
-      const hitCount = ship ? ship.hits.size : 0;
-      const dots = Array.from({ length: cfg.length }, (_, di) =>
-        di < hitCount ? "✕" : "●",
-      ).join("");
-      ctx.fillStyle = sunk ? "#661111" : hex(C.GREEN);
-      ctx.font = `11px ${FONT}`;
-      ctx.fillText(`${cfg.name} ${dots}`, ppx + (i % 4) * 200, ppy + 18 + Math.floor(i / 4) * 20);
-    });
-  }
-
-  /* ============ TRANSITIONS & ANIMATIONS ============ */
-
-  private startFade(to: "radar" | "iso", cb: () => void): void {
-    this.fadingTo = to;
-    this.fadeAlpha = 1;
-    const check = () => {
-      if (this.viewMode === to && this.fadeAlpha >= 0.9) {
-        cb();
-      } else {
-        requestAnimationFrame(check);
-      }
-    };
-    // Allow fade to process in update loop
-    setTimeout(check, 350);
-  }
-
-  private fireShell(toPlayer: boolean, row: number, col: number, result: ShotResult, onDone: () => void): void {
-    const ox = toPlayer ? ISO_P_OX : ISO_E_OX;
-    const oy = toPlayer ? ISO_P_OY : ISO_E_OY;
-    const toX = ox + (col - row) * (ISO_TW / 2);
-    const toY = oy + (col + row) * (ISO_TH / 2);
-    const fromOx = toPlayer ? ISO_E_OX : ISO_P_OX;
-    const fromOy = toPlayer ? ISO_E_OY - 60 : ISO_P_OY - 60;
-
-    this.shell = {
-      fromX: fromOx, fromY: fromOy,
-      toX, toY,
-      midX: (fromOx + toX) / 2,
-      midY: Math.min(fromOy, toY) - 120,
-      t: 0,
-      duration: 1.5,
-      result,
-      onDone,
-    };
-  }
-
-  private isoX(row: number, col: number, isPlayer: boolean): number {
-    const ox = isPlayer ? ISO_P_OX : ISO_E_OX;
-    return ox + (col - row) * (ISO_TW / 2);
-  }
-
-  private isoY(row: number, col: number, isPlayer: boolean): number {
-    const oy = isPlayer ? ISO_P_OY : ISO_E_OY;
-    return oy + (col + row) * (ISO_TH / 2);
-  }
-
-  private spawnExplosion(x: number, y: number): void {
-    for (let i = 0; i < 12; i++) {
-      this.particles.push({
-        x: x + (Math.random() - 0.5) * 14,
-        y: y + (Math.random() - 0.5) * 14,
-        r: 5 + Math.random() * 8,
-        color: i < 5 ? hex(C.FLAME) : (i < 9 ? hex(C.HIT_RED) : hex(C.SMOKE)),
-        life: 0.6 + Math.random() * 0.4,
-        maxLife: 1.0,
-      });
-    }
-  }
-
-  private spawnSplash(x: number, y: number): void {
-    for (let i = 0; i < 7; i++) {
-      this.particles.push({
-        x: x + (Math.random() - 0.5) * 12,
-        y: y + (Math.random() - 0.5) * 12,
-        r: 4 + Math.random() * 5,
-        color: hex(C.FOAM),
-        life: 0.5 + Math.random() * 0.3,
-        maxLife: 0.8,
-      });
-    }
+    ctx.font = `28px ${FONT}`;
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 3;
+    ctx.strokeText(this.sunkBanner.text, CANVAS_W / 2, this.sunkBanner.y);
+    ctx.fillStyle = hex(C.FLAME);
+    ctx.fillText(this.sunkBanner.text, CANVAS_W / 2, this.sunkBanner.y);
+    ctx.restore();
   }
 
   /* ============ AI ============ */
@@ -634,7 +593,7 @@ export class BattleScene implements GameScene {
 
       if (!wasFallback && llmAI.isFallbackActive && !this.llmSwitchedToFast) {
         this.llmSwitchedToFast = true;
-        this.status = "Cost limit reached — switched to Fast AI";
+        this.status = "Cost limit reached \u2014 switched to Fast AI";
       }
 
       this.executeEnemyShot(coord);
@@ -651,110 +610,52 @@ export class BattleScene implements GameScene {
     this.ai.recordResult(coord, result.hit, result.sunkShip);
 
     if (result.hit) {
+      this.engine.audio.explosion();
       if (result.sunkShip) {
+        this.engine.shipsLost++;
+        this.engine.audio.sinkGroan();
         this.status = `AI sank your ${result.sunkShip.config.name}!`;
+        this.addLog(`AI SUNK your ${result.sunkShip.config.name}!`, hex(C.HIT_RED));
+        this.sunkBanner = {
+          text: `YOUR ${result.sunkShip.config.name.toUpperCase()} SUNK`,
+          alpha: 1.5,
+          y: CANVAS_H / 2 - 20,
+        };
       } else {
         this.status = `AI hit at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}!`;
+        this.addLog(`AI HIT at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}`, "#ff8844");
       }
     } else {
+      this.engine.audio.splash();
       this.status = `AI missed at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}.`;
+      this.addLog(`AI miss at ${ROW_LABELS[coord.row]}${COL_LABELS[coord.col]}`, hex(C.DIM_GREEN));
     }
 
-    this.engine.audio.shoot();
-
-    if (this.engine.fastMode) {
-      if (result.hit) {
-        this.engine.audio.explosion();
-      } else {
-        this.engine.audio.splash();
-      }
+    setTimeout(() => {
       if (this.playerBoard.allSunk()) {
         this.engine.score = this.score;
         this.engine.playerWon = false;
+        this.engine.gameEndTime = Date.now();
         this.engine.audio.defeat();
         this.engine.switchScene(SCENES.GAMEOVER);
         return;
       }
       this.phase = "player_turn";
-      this.status = "YOUR TURN — Click enemy grid to fire";
-    } else {
-      this.fireShell(true, coord.row, coord.col, result, () => {
-        if (this.playerBoard.allSunk()) {
-          this.engine.score = this.score;
-          this.engine.playerWon = false;
-          this.engine.audio.defeat();
-          this.engine.switchScene(SCENES.GAMEOVER);
-          return;
-        }
-        // Fade back to radar
-        this.startFade("radar", () => {
-          this.phase = "player_turn";
-          this.status = "YOUR TURN — Click enemy grid to fire";
-        });
-      });
-    }
-  }
-
-  /* ============ MINI-MAP ============ */
-
-  private drawMiniMap(ctx: CanvasRenderingContext2D): void {
-    const MC = 12; // mini-map cell size
-    const MX = CANVAS_W - GRID_SIZE * MC - 30;
-    const MY = CANVAS_H - GRID_SIZE * MC - 60;
-
-    // Background
-    ctx.fillStyle = "rgba(0,0,0,0.7)";
-    ctx.fillRect(MX - 4, MY - 22, GRID_SIZE * MC + 8, GRID_SIZE * MC + 26);
-
-    // Label
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = `10px ${FONT}`;
-    ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText("YOUR WATERS", MX + (GRID_SIZE * MC) / 2, MY - 10);
-
-    // Grid lines
-    ctx.strokeStyle = `rgba(26,138,26,0.3)`;
-    ctx.lineWidth = 0.5;
-    for (let r = 0; r <= GRID_SIZE; r++) {
-      ctx.beginPath();
-      ctx.moveTo(MX, MY + r * MC);
-      ctx.lineTo(MX + GRID_SIZE * MC, MY + r * MC);
-      ctx.stroke();
-    }
-    for (let c = 0; c <= GRID_SIZE; c++) {
-      ctx.beginPath();
-      ctx.moveTo(MX + c * MC, MY);
-      ctx.lineTo(MX + c * MC, MY + GRID_SIZE * MC);
-      ctx.stroke();
-    }
-
-    // Ships + markers
-    for (let r = 0; r < GRID_SIZE; r++) {
-      for (let c = 0; c < GRID_SIZE; c++) {
-        const st = this.playerBoard.grid[r][c];
-        if (st === "hit") {
-          ctx.fillStyle = `rgba(255,42,42,0.9)`;
-          ctx.fillRect(MX + c * MC + 1, MY + r * MC + 1, MC - 2, MC - 2);
-        } else if (st === "miss") {
-          ctx.fillStyle = `rgba(255,255,255,0.5)`;
-          ctx.beginPath();
-          ctx.arc(MX + c * MC + MC / 2, MY + r * MC + MC / 2, 2, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (st === "ship") {
-          ctx.fillStyle = `rgba(51,255,51,0.3)`;
-          ctx.fillRect(MX + c * MC + 1, MY + r * MC + 1, MC - 2, MC - 2);
-        }
-      }
-    }
+      this.status = "YOUR TURN \u2014 Click enemy grid to fire";
+    }, 600);
   }
 
   /* ============ HELPERS ============ */
 
-  private radarCell(x: number, y: number): { row: number; col: number } | null {
-    const col = Math.floor((x - RGX) / CELL);
-    const row = Math.floor((y - RGY) / CELL);
+  private enemyCell(x: number, y: number): { row: number; col: number } | null {
+    const col = Math.floor((x - E_GX) / CELL);
+    const row = Math.floor((y - E_GY) / CELL);
     if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
     return { row, col };
+  }
+
+  private addLog(text: string, color: string): void {
+    this.log.push({ text, color, time: Date.now() });
+    if (this.log.length > 50) this.log.shift();
   }
 }

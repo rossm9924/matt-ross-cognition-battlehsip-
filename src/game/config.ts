@@ -1,9 +1,9 @@
-export const GRID_SIZE = 14;
+export const GRID_SIZE = 10;
 export const CANVAS_W = 1280;
 export const CANVAS_H = 800;
 
-export const ROW_LABELS = "ABCDEFGHIJKLMN".split("");
-export const COL_LABELS = Array.from({ length: 14 }, (_, i) => String(i + 1));
+export const ROW_LABELS = "ABCDEFGHIJ".split("");
+export const COL_LABELS = Array.from({ length: 10 }, (_, i) => String(i + 1));
 
 export interface ShipConfig {
   name: string;
@@ -12,22 +12,24 @@ export interface ShipConfig {
 }
 
 export const CLASSIC_FLEET: ShipConfig[] = [
+  { name: "Carrier", length: 5, id: "carrier" },
+  { name: "Battleship", length: 4, id: "battleship" },
+  { name: "Cruiser", length: 3, id: "cruiser" },
   { name: "Submarine", length: 3, id: "submarine" },
-  { name: "Frigate", length: 3, id: "frigate" },
-  { name: "Cruiser", length: 4, id: "cruiser" },
-  { name: "Aircraft Carrier", length: 5, id: "carrier" },
-  { name: "Battleship", length: 5, id: "battleship" },
+  { name: "Destroyer", length: 2, id: "destroyer" },
 ];
 
 export const ADVANCED_FLEET: ShipConfig[] = [
+  { name: "Carrier", length: 5, id: "carrier" },
+  { name: "Battleship", length: 4, id: "battleship" },
+  { name: "Cruiser", length: 3, id: "cruiser" },
   { name: "Submarine", length: 3, id: "submarine" },
+  { name: "Destroyer", length: 2, id: "destroyer" },
   { name: "Frigate", length: 3, id: "frigate" },
-  { name: "Destroyer", length: 3, id: "destroyer2" },
-  { name: "Missile Boat", length: 2, id: "missile_boat" },
-  { name: "Cruiser", length: 4, id: "cruiser" },
-  { name: "Aircraft Carrier", length: 5, id: "carrier" },
-  { name: "Battleship", length: 5, id: "battleship" },
+  { name: "Patrol Boat", length: 2, id: "patrol" },
 ];
+
+export type Difficulty = "easy" | "normal" | "hard";
 
 export function hex(n: number): string {
   return "#" + n.toString(16).padStart(6, "0");
@@ -39,7 +41,7 @@ export const C = {
   DIM_GREEN: 0x1a8a1a,
   DARK_GREEN: 0x0d440d,
   HIT_RED: 0xff2a2a,
-  MISS_GREEN: 0x226622,
+  MISS_WHITE: 0xcccccc,
   OCEAN: 0x2a6fb2,
   DEEP_OCEAN: 0x1a4f82,
   FOAM: 0xddeeff,
@@ -49,6 +51,7 @@ export const C = {
   SMOKE: 0x444444,
   WHITE: 0xffffff,
   PANEL_BG: 0x111111,
+  SUNK_OVERLAY: 0x661111,
 };
 
 export const SCORE_HIT = 15;
