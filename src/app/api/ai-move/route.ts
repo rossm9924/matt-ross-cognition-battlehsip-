@@ -172,7 +172,12 @@ export async function POST(request: Request) {
     const text =
       message.content[0].type === "text" ? message.content[0].text : "";
 
-    const parsed = JSON.parse(text.trim());
+    // Extract JSON object even if Claude adds extra text before/after
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("No JSON object found in Claude response");
+    }
+    const parsed = JSON.parse(jsonMatch[0]);
     const row = Math.max(0, Math.min(9, Math.floor(parsed.row)));
     const col = Math.max(0, Math.min(9, Math.floor(parsed.col)));
 
