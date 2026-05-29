@@ -1,5 +1,28 @@
 import Anthropic from "@anthropic-ai/sdk";
 
+function extractJson(text: string): { row: number; col: number; reasoning?: string } {
+  const start = text.indexOf("{");
+  if (start === -1) throw new Error("No JSON object in response");
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { escape = false; continue; }
+    if (ch === "\\" && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return JSON.parse(text.slice(start, i + 1));
+      }
+    }
+  }
+  throw new Error("Incomplete JSON object in response");
+}
+
 function getApiKey(): string | undefined {
   return (
     process.env.ANTHROPIC_API_KEY ||
@@ -172,12 +195,8 @@ export async function POST(request: Request) {
     const text =
       message.content[0].type === "text" ? message.content[0].text : "";
 
-    // Extract JSON object even if Claude adds extra text before/after
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON object found in Claude response");
-    }
-    const parsed = JSON.parse(jsonMatch[0]);
+    // Extract first complete JSON object from response
+    const parsed = extractJson(text);
     const row = Math.max(0, Math.min(9, Math.floor(parsed.row)));
     const col = Math.max(0, Math.min(9, Math.floor(parsed.col)));
 
