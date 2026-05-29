@@ -66,7 +66,7 @@ export class GameOverScene implements GameScene {
     // Stats panel (#15)
     this.renderStats(ctx, cx, 290);
 
-    // Ship summary
+    // Fleet status summary
     this.renderShipSummary(ctx, cx, 420);
 
     // Buttons
@@ -155,6 +155,19 @@ export class GameOverScene implements GameScene {
     }
   }
 
+  private drawBtn(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, label: string): void {
+    const hover = this.inRect(this.mx, this.my, x, y, w, h);
+    ctx.fillStyle = hover ? hex(C.GREEN) : hex(C.DIM_GREEN);
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.fillStyle = "#000";
+    ctx.font = `20px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + w / 2, y + h / 2);
+  }
+
   private renderShipSummary(ctx: CanvasRenderingContext2D, cx: number, y: number): void {
     const fleet = this.engine.gameMode === "advanced" ? ADVANCED_FLEET : CLASSIC_FLEET;
     const playerBoard = this.engine.playerBoard;
@@ -170,7 +183,6 @@ export class GameOverScene implements GameScene {
     ctx.fillStyle = hex(C.DIM_GREEN);
     ctx.fillText("FLEET STATUS", cx, y);
 
-    // Column headers
     ctx.font = `10px ${FONT}`;
     ctx.textAlign = "left";
     ctx.fillStyle = hex(C.GREEN);
@@ -181,33 +193,18 @@ export class GameOverScene implements GameScene {
     fleet.forEach((cfg, i) => {
       const rowY = y + 34 + i * 16;
 
-      // Player ship status
       const pShip = playerBoard.ships.find((s) => s.config.id === cfg.id);
       const pSunk = pShip ? isShipSunk(pShip) : false;
       ctx.font = `10px ${FONT}`;
       ctx.textAlign = "left";
       ctx.fillStyle = pSunk ? hex(C.SUNK_OVERLAY) : hex(C.GREEN);
-      ctx.fillText(`${pSunk ? "✕" : "●"} ${cfg.name}`, leftX, rowY);
+      ctx.fillText(`${pSunk ? "\u2715" : "\u25CF"} ${cfg.name}`, leftX, rowY);
 
-      // Enemy ship status
       const eShip = enemyBoard.ships.find((s) => s.config.id === cfg.id);
       const eSunk = eShip ? isShipSunk(eShip) : false;
       ctx.fillStyle = eSunk ? hex(C.SUNK_OVERLAY) : hex(C.HIT_RED);
-      ctx.fillText(`${eSunk ? "✕" : "●"} ${cfg.name}`, rightX, rowY);
+      ctx.fillText(`${eSunk ? "\u2715" : "\u25CF"} ${cfg.name}`, rightX, rowY);
     });
-  }
-
-  private drawBtn(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, label: string): void {
-    const hover = this.inRect(this.mx, this.my, x, y, w, h);
-    ctx.fillStyle = hover ? hex(C.GREEN) : hex(C.DIM_GREEN);
-    ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 8);
-    ctx.fill();
-    ctx.fillStyle = "#000";
-    ctx.font = `20px ${FONT}`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, x + w / 2, y + h / 2);
   }
 
   private inRect(px: number, py: number, rx: number, ry: number, rw: number, rh: number): boolean {
