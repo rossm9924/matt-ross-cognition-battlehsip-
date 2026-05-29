@@ -157,7 +157,8 @@ export async function POST(request: Request) {
     }
 
     const client = getClient();
-    const modelId = "claude-sonnet-4-20250514";
+    const modelId =
+      process.env.CLAUDE_MODEL || "claude-3-5-sonnet-20241022";
     const systemPrompt = buildSystemPrompt(difficulty || "normal");
     const userPrompt = buildUserPrompt(boardState);
 
