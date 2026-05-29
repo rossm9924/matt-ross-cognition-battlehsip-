@@ -62,13 +62,6 @@ export class GameOverScene implements GameScene {
     // Buttons
     this.drawBtn(ctx, cx - 140, cy + 100, 280, 50, "PLAY AGAIN");
     this.drawBtn(ctx, cx - 140, cy + 170, 280, 50, "CHANGE MODE");
-
-    // Mute
-    ctx.fillStyle = "#222";
-    ctx.fillRect(W - 56, 16, 32, 28);
-    ctx.font = "20px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", W - 40, 30);
   }
 
   onMouseMove(x: number, y: number): void {
@@ -79,12 +72,6 @@ export class GameOverScene implements GameScene {
   onMouseDown(x: number, y: number): void {
     const cx = CANVAS_W / 2;
     const cy = CANVAS_H / 2;
-
-    // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
-      this.engine.audio.toggleMute();
-      return;
-    }
 
     // Play Again
     if (this.inRect(x, y, cx - 140, cy + 100, 280, 50)) {

@@ -1,4 +1,4 @@
-import { CANVAS_W, CANVAS_H } from "./config";
+import { CANVAS_W, CANVAS_H, FONT, hex, C, SCENES } from "./config";
 import { GameMode } from "./types";
 import { Board } from "./Board";
 import { AudioManager } from "./AudioManager";
@@ -24,9 +24,12 @@ export class Engine {
   playerBoard: Board | null = null;
   score = 0;
   playerWon = false;
+  showInfo = false;
+  fastMode = false;
 
   private scenes = new Map<string, GameScene>();
   private current: GameScene | null = null;
+  private currentName = "";
   private animId = 0;
   private lastTime = 0;
 
@@ -58,6 +61,8 @@ export class Engine {
   switchScene(name: string): void {
     this.current?.leave?.();
     this.current = this.scenes.get(name) ?? null;
+    this.currentName = name;
+    this.showInfo = false;
     this.current?.enter(this);
   }
 
@@ -104,6 +109,7 @@ export class Engine {
 
   private onMD = (e: MouseEvent) => {
     const { x, y } = this.coords(e);
+    if (this.handleTopBarClick(x, y)) return;
     this.current?.onMouseDown?.(x, y, e.button);
   };
 
@@ -116,6 +122,104 @@ export class Engine {
     this.lastTime = time;
     this.current?.update(dt);
     this.current?.render(this.ctx);
+
+    // Persistent top bar on non-title screens
+    if (this.currentName !== SCENES.TITLE) {
+      this.renderTopBar(this.ctx);
+    }
+
+    // Info overlay
+    if (this.showInfo) {
+      this.renderInfoOverlay(this.ctx);
+    }
+
     this.animId = requestAnimationFrame(this.loop);
   };
+
+  handleTopBarClick(x: number, y: number): boolean {
+    if (this.currentName === SCENES.TITLE) return false;
+
+    // Info overlay dismissal
+    if (this.showInfo) {
+      this.showInfo = false;
+      return true;
+    }
+
+    // ? button (top-left)
+    if (x < 60 && y < 50) {
+      this.showInfo = true;
+      return true;
+    }
+
+    // Mute button (top-right)
+    if (x > CANVAS_W - 70 && y < 50) {
+      this.audio.toggleMute();
+      return true;
+    }
+
+    // QUIT button
+    if (x >= 70 && x <= 150 && y < 50) {
+      this.switchScene(SCENES.TITLE);
+      return true;
+    }
+
+    // FAST mode toggle
+    if (x >= CANVAS_W - 130 && x <= CANVAS_W - 70 && y < 50) {
+      this.fastMode = !this.fastMode;
+      return true;
+    }
+
+    return false;
+  }
+
+  private renderTopBar(ctx: CanvasRenderingContext2D): void {
+    // ? icon
+    ctx.fillStyle = "#222";
+    ctx.fillRect(14, 16, 32, 28);
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.font = `20px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("?", 30, 30);
+
+    // QUIT button
+    ctx.fillStyle = "#222";
+    ctx.fillRect(70, 16, 70, 28);
+    ctx.fillStyle = hex(C.HIT_RED);
+    ctx.font = `12px ${FONT}`;
+    ctx.fillText("QUIT", 105, 30);
+
+    // FAST toggle
+    ctx.fillStyle = this.fastMode ? hex(C.GREEN) : "#222";
+    ctx.fillRect(CANVAS_W - 126, 16, 54, 28);
+    ctx.fillStyle = this.fastMode ? "#000" : hex(C.DIM_GREEN);
+    ctx.font = `11px ${FONT}`;
+    ctx.fillText("FAST", CANVAS_W - 99, 30);
+
+    // Mute icon
+    ctx.fillStyle = "#222";
+    ctx.fillRect(CANVAS_W - 56, 16, 32, 28);
+    ctx.font = "20px sans-serif";
+    ctx.fillText(this.audio.muted ? "🔇" : "🔊", CANVAS_W - 40, 30);
+  }
+
+  private renderInfoOverlay(ctx: CanvasRenderingContext2D): void {
+    ctx.fillStyle = "rgba(0,0,0,0.88)";
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.font = `18px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const cx = CANVAS_W / 2;
+    const cy = CANVAS_H / 2;
+    const lines = [
+      "BATTLESHIP WAR — RULES", "",
+      "Place your fleet on the 14×14 grid.",
+      "Take turns firing at the enemy grid.",
+      "Hit = red marker, Miss = white dot.",
+      "Sink all enemy ships to win!", "",
+      "Click anywhere to close.",
+    ];
+    lines.forEach((l, i) => ctx.fillText(l, cx, cy - 100 + i * 30));
+  }
 }

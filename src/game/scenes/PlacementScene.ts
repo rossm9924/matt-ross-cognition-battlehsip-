@@ -49,11 +49,12 @@ export class PlacementScene implements GameScene {
     ctx.fillText("STRATEGY PANEL", CANVAS_W / 2, 25);
 
     const gridCenterX = GX + (GRID_SIZE * CELL) / 2;
-    ctx.font = `13px ${FONT}`;
+    ctx.font = `11px ${FONT}`;
     ctx.fillStyle = hex(C.DIM_GREEN);
-    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()}`, gridCenterX, 50);
+    ctx.fillText(`Mode: ${this.engine.gameMode.toUpperCase()}`, gridCenterX, 55);
+    ctx.font = `13px ${FONT}`;
     ctx.fillStyle = hex(C.GREEN);
-    ctx.fillText(this.msg, gridCenterX, 70);
+    ctx.fillText(this.msg, gridCenterX, 78);
 
     // Grid
     this.drawGrid(ctx);
@@ -61,7 +62,6 @@ export class PlacementScene implements GameScene {
     this.drawPreview(ctx);
     this.drawPalette(ctx);
     this.drawButtons(ctx);
-    this.drawMuteIcon(ctx);
   }
 
   onMouseMove(x: number, y: number): void {
@@ -72,12 +72,6 @@ export class PlacementScene implements GameScene {
   onMouseDown(x: number, y: number, button: number): void {
     if (button === 2) {
       this.toggleOrientation();
-      return;
-    }
-
-    // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
-      this.engine.audio.toggleMute();
       return;
     }
 
@@ -243,18 +237,32 @@ export class PlacementScene implements GameScene {
     ctx.fillStyle = hex(C.GREEN);
     ctx.fillText("YOUR FLEET", px, py - 20);
 
-    this.remaining.forEach((cfg, i) => {
+    this.fleet.forEach((cfg, i) => {
       const iy = py + i * 44;
+      const isPlaced = !this.remaining.some((r) => r.id === cfg.id);
       const isSel = this.selected?.id === cfg.id;
-      ctx.fillStyle = isSel ? `rgba(51,255,51,0.8)` : `rgba(26,138,26,0.4)`;
+
+      if (isSel) {
+        ctx.fillStyle = `rgba(51,255,51,0.8)`;
+      } else if (isPlaced) {
+        ctx.fillStyle = `rgba(51,255,51,0.35)`;
+      } else {
+        ctx.fillStyle = `rgba(26,138,26,0.4)`;
+      }
+
       const w = cfg.length * 24;
       ctx.beginPath();
       ctx.roundRect(px, iy, w, 20, 4);
       ctx.fill();
 
       ctx.font = `12px ${FONT}`;
-      ctx.fillStyle = isSel ? hex(C.GREEN) : hex(C.DIM_GREEN);
-      ctx.fillText(cfg.name, px + w + 10, iy + 10);
+      if (isPlaced) {
+        ctx.fillStyle = hex(C.GREEN);
+        ctx.fillText(`✓ ${cfg.name}`, px + w + 10, iy + 10);
+      } else {
+        ctx.fillStyle = isSel ? hex(C.GREEN) : hex(C.DIM_GREEN);
+        ctx.fillText(cfg.name, px + w + 10, iy + 10);
+      }
     });
 
     const rotateBtnY = GY + Math.max(this.fleet.length, 7) * 44 + 80;
@@ -294,15 +302,6 @@ export class PlacementScene implements GameScene {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(label, x + w / 2, y + h / 2);
-  }
-
-  private drawMuteIcon(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = "#222";
-    ctx.fillRect(CANVAS_W - 56, 16, 32, 28);
-    ctx.font = "20px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", CANVAS_W - 40, 30);
   }
 
   private drawRotateBtn(ctx: CanvasRenderingContext2D, x: number, y: number): void {

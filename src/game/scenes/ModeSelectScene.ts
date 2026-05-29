@@ -33,12 +33,6 @@ export class ModeSelectScene implements GameScene {
 
     this.drawTile(ctx, cx - 180, 200, "CLASSIC", "5 Ships\nStandard Fleet", [5, 5, 4, 3, 3]);
     this.drawTile(ctx, cx + 180, 200, "ADVANCED", "7 Ships\nExpanded Fleet", [5, 5, 4, 3, 3, 3, 2]);
-
-    // Mute icon
-    ctx.fillStyle = "#222";
-    ctx.fillRect(W - 56, 16, 32, 28);
-    ctx.font = "20px sans-serif";
-    ctx.fillText(this.engine.audio.muted ? "🔇" : "🔊", W - 40, 30);
   }
 
   onMouseMove(x: number, y: number): void {
@@ -47,11 +41,6 @@ export class ModeSelectScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
-    // Mute
-    if (x > CANVAS_W - 70 && y < 50) {
-      this.engine.audio.toggleMute();
-      return;
-    }
     const cx = CANVAS_W / 2;
     // Classic tile
     if (this.inRect(x, y, cx - 180 - 140, 200, 280, 360)) {
