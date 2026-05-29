@@ -48,6 +48,7 @@ export class BattleScene implements GameScene {
   private status = "YOUR TURN — Click enemy grid to fire";
   private sweepX = 0;
   private fleet!: ShipConfig[];
+  private showInfo = false;
   private log: LogEntry[] = [];
   private sunkBanner: SunkBanner | null = null;
 
@@ -71,6 +72,7 @@ export class BattleScene implements GameScene {
     this.cursorRow = 0;
     this.cursorCol = 0;
     this.cursorActive = false;
+    this.showInfo = false;
     this.status = "YOUR TURN — Click enemy grid to fire";
     engine.resetStats();
   }
@@ -98,6 +100,7 @@ export class BattleScene implements GameScene {
     this.renderBattleLog(ctx);
     this.renderHUD(ctx);
     this.renderSunkBanner(ctx);
+    this.renderInfoOverlay(ctx);
   }
 
   onMouseMove(x: number, y: number): void {
@@ -107,6 +110,16 @@ export class BattleScene implements GameScene {
   }
 
   onMouseDown(x: number, y: number): void {
+    // Close overlay
+    if (this.showInfo) {
+      this.showInfo = false;
+      return;
+    }
+    // Help icon
+    if (x < 60 && y < 50) {
+      this.showInfo = true;
+      return;
+    }
     // Mute
     if (x > CANVAS_W - 70 && y < 50) {
       this.engine.audio.toggleMute();
@@ -117,8 +130,6 @@ export class BattleScene implements GameScene {
       this.engine.switchScene(SCENES.TITLE);
       return;
     }
-    // Help icon
-    if (x < 60 && y < 50) return;
 
     if (this.phase !== "player_turn") return;
 
@@ -539,6 +550,27 @@ export class BattleScene implements GameScene {
     ctx.fillStyle = hex(C.FLAME);
     ctx.fillText(this.sunkBanner.text, CANVAS_W / 2, this.sunkBanner.y);
     ctx.restore();
+  }
+
+  private renderInfoOverlay(ctx: CanvasRenderingContext2D): void {
+    if (!this.showInfo) return;
+    ctx.fillStyle = "rgba(0,0,0,0.88)";
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.fillStyle = hex(C.GREEN);
+    ctx.font = `18px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const lines = [
+      "BATTLESHIP WAR — RULES", "",
+      "Place your fleet on the 10×10 grid.",
+      "Take turns firing at the enemy grid.",
+      "Hit = red marker, Miss = white dot.",
+      "Sink all enemy ships to win!", "",
+      "Use arrow keys + Enter to fire.",
+      "R to rotate ships during placement.", "",
+      "Click anywhere to close.",
+    ];
+    lines.forEach((l, i) => ctx.fillText(l, CANVAS_W / 2, CANVAS_H / 2 - 120 + i * 28));
   }
 
   /* ============ AI ============ */
