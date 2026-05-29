@@ -1,5 +1,5 @@
 import { CANVAS_W, CANVAS_H } from "./config";
-import { GameMode } from "./types";
+import { GameMode, Difficulty } from "./types";
 import { Board } from "./Board";
 import { AudioManager } from "./AudioManager";
 
@@ -21,9 +21,17 @@ export class Engine {
   audio = new AudioManager();
 
   gameMode: GameMode = "classic";
+  difficulty: Difficulty = "normal";
   playerBoard: Board | null = null;
   score = 0;
   playerWon = false;
+
+  // Stats for game over (#15)
+  shotsFired = 0;
+  shotsHit = 0;
+  shipsLost = 0;
+  gameStartTime = 0;
+  gameEndTime = 0;
 
   private scenes = new Map<string, GameScene>();
   private current: GameScene | null = null;
@@ -65,6 +73,15 @@ export class Engine {
     this.switchScene(sceneName);
     this.lastTime = performance.now();
     this.loop(this.lastTime);
+  }
+
+  resetStats(): void {
+    this.shotsFired = 0;
+    this.shotsHit = 0;
+    this.shipsLost = 0;
+    this.gameStartTime = Date.now();
+    this.gameEndTime = 0;
+    this.score = 0;
   }
 
   destroy(): void {
